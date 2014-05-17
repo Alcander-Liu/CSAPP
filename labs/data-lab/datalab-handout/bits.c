@@ -239,7 +239,18 @@ int tmin(void) {
  *   Rating: 2
  */
 int fitsBits(int x, int n) {
-  return 2;
+  /*
+    check -2^(n-1) <= x <= 2^(n-1) - 1
+    ==> x + 2^(n-1) >= 0 &&  2^(n-1) - 1 - x >= 0
+   */
+  int m_1 = (~1) + 1; // -1
+  int n_1 = n + m_1; // n - 1
+  int n_min = (1 << n_1); // 1 << (n-1)
+  int n_max = n_min + m_1; // 1 << (n-1) - 1
+  int m_x = ~x + 1; // -x
+  int mask = (1 << 31);
+  // check sign
+  return !((n_max + m_x) & mask) & ! ((x + n_min) & mask);
 }
 /*
  * divpwr2 - Compute x/(2^n), for 0 <= n <= 30
