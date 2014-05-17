@@ -202,7 +202,23 @@ int bitCount(int x) {
  *   Rating: 4
  */
 int bang(int x) {
-  return 2;
+  /*
+    the most significant bit of x and x - 1 will not be different
+    except x = 0 or x = (1<<31) (due to overflow)
+    to check whether the most significant bit is change we can
+    (x ^ ((x - 1) >> 31)) & 0x1, if = 1, means change, otherwise not
+    So if it is changed we can know x = 0 or (1 << 31)
+    How can we get rid of the case (1 << 31): we have to make some change to
+    the negative number.
+    Since we know that -1 >> 1 = -1, so apply >> 1 to the negative number
+   */
+
+  // Only apply >> 1 to the negative number, if it is positive number keep
+  // the original number
+  x >>= (x >> 31) & 0x01;
+  // x minus 1
+  int x_m_1 = x + (~1) + 1; // x - 1
+  return (x ^ x_m_1) >> 31 & 0x01;
 }
 /*
  * tmin - return minimum two's complement integer
