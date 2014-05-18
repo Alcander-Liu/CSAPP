@@ -299,7 +299,15 @@ int isPositive(int x) {
  *   Rating: 3
  */
 int isLessOrEqual(int x, int y) {
-  return 2;
+  /*
+    case 1: x == y, x - y = 0  => x + (~y) + 1 = 0
+    case 2: x and y have different sign => x < 0
+    case 3: x and y have same sign => y - x > 0
+   */
+  int sign_x = (x >> 31) & 0x1;
+  int sign_y = (y >> 31) & 0x1;
+  int sign_y_x = ((y + (~x) + 1) >> 31) & 0x1;
+  return !(x+(~y)+1) | ((sign_x ^ sign_y) & sign_x) | (!(sign_x ^ sign_y) & !sign_y_x);
 }
 /*
  * ilog2 - return floor(log base 2 of x), where x > 0
