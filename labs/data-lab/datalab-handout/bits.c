@@ -422,14 +422,14 @@ unsigned float_i2f(int x) {
   if (sign_x) {
     x = -x;
   }
-  ret |= sign_x << 31;
+  ret = ret | (sign_x << 31);
 
   int temp = x;
   // count number of bits from 31 to MSB, cnt = 31 - MSB_Position(0-index)
   int cnt = 0;
   while ( !(temp & (1 << 31)) ) {
-    cnt += 1;
-    temp <<= 1;
+    cnt = cnt + 1;
+    temp = temp << 1;
   }
 
   int MSB_pos = 31 - cnt;
@@ -450,9 +450,9 @@ unsigned float_i2f(int x) {
     int half = 1 << (LSB_pos - 1);
 
     int round_num = x & mask;
-    x &= ~(mask); // clear the bits
+    x = x & ~(mask);
     if ( round_num > half || (round_num == half && (x & LSB_mask)) ) {
-      x += LSB_mask;
+      x = x + LSB_mask;
     }
   }
 
@@ -460,8 +460,8 @@ unsigned float_i2f(int x) {
   temp = x;
   cnt = 0;
   while ( !(temp & (1 << 31)) ) {
-    cnt += 1;
-    temp <<= 1;
+    cnt = cnt + 1;
+    temp = temp << 1;
   }
 
   MSB_pos = 31 - cnt;
@@ -471,7 +471,7 @@ unsigned float_i2f(int x) {
   int frac = x << (32 - MSB_pos) >> 9; // 9 = 31 - 22
 
   // the right shitf should be logical shitft (add 0)
-  frac &= (1 << 23) - 1;
+  frac = frac & ((1 << 23) - 1);
 
   return ret | Exp << 23 | frac;
 }
