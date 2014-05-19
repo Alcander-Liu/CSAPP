@@ -1,4 +1,5 @@
-# Exercise and Lab solutions for Computer Systems A Programmer's Perspective (深入理解计算机系统)
+Exercise and Lab solutions for Computer Systems A Programmer's Perspective
+----
 
 ### Labs
   * Note: Complie and Test Enviroment Ubuntu 14.04. When use Mac, the -O option will incur incorrect ansewer.
