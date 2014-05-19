@@ -191,7 +191,18 @@ int logicalShift(int x, int n) {
  *   Rating: 4
  */
 int bitCount(int x) {
-  return 2;
+  int mask1 = 0x55 << 8 | 0x55; mask1 = mask1 << 16 | mask1;
+  int mask2 = 0x33 << 8 | 0x33; mask2 = mask2 << 16 | mask2;
+  int mask3 = 0x0F << 8 | 0x0F; mask3 = mask3 << 16 | mask3;
+  int mask4 = 0xFF << 16 | 0xFF;
+  int mask5 = 0xFF << 8 | 0xFF;
+
+  x = (x & mask1) + ((x >> 1) & mask1);
+  x = (x & mask2) + ((x >> 2) & mask2);
+  x = (x & mask3) + ((x >> 4) & mask3);
+  x = (x & mask4) + ((x >> 8) & mask4);
+  x = (x & mask5) + ((x >> 16) & mask5);
+  return x;
 }
 /*
  * bang - Compute !x without using !
@@ -228,6 +239,7 @@ int bang(int x) {
 int tmin(void) {
   return 1 << 31;
 }
+
 /*
  * fitsBits - return 1 if x can be represented as an
  *  n-bit, two's complement integer.
@@ -238,19 +250,10 @@ int tmin(void) {
  *   Rating: 2
  */
 int fitsBits(int x, int n) {
-  /*
-    check -2^(n-1) <= x <= 2^(n-1) - 1
-    ==> x + 2^(n-1) >= 0 &&  2^(n-1) - 1 - x >= 0
-   */
-  int m_1 = (~1) + 1; // -1
-  int n_1 = n + m_1; // n - 1
-  int n_min = (1 << n_1); // 1 << (n-1)
-  int n_max = n_min + m_1; // 1 << (n-1) - 1
-  int m_x = ~x + 1; // -x
-  int mask = (1 << 31);
-  // check sign
-  return !((n_max + m_x) & mask) & ! ((x + n_min) & mask);
+  int shitfs = 32 + (~n) + 1;
+  return !((x << shitfs >> shitfs) ^ x);
 }
+
 /*
  * divpwr2 - Compute x/(2^n), for 0 <= n <= 30
  *  Round toward zero
@@ -316,71 +319,7 @@ int isLessOrEqual(int x, int y) {
  *   Rating: 4
  */
 int ilog2(int x) {
-  // TODO: reduce operation
-  int ret = 0;
-  x >>= 1;
-  ret += !!x;
-  x >>= 1;
-  ret += !!x;
-  x >>= 1;
-  ret += !!x;
-  x >>= 1;
-  ret += !!x;
-  x >>= 1;
-  ret += !!x;
-  x >>= 1;
-  ret += !!x;
-  x >>= 1;
-  ret += !!x;
-  x >>= 1;
-  ret += !!x;
-  x >>= 1;
-  ret += !!x;
-  x >>= 1;
-  ret += !!x;
-  x >>= 1;
-  ret += !!x;
-  x >>= 1;
-  ret += !!x;
-  x >>= 1;
-  ret += !!x;
-  x >>= 1;
-  ret += !!x;
-  x >>= 1;
-  ret += !!x;
-  x >>= 1;
-  ret += !!x;
-  x >>= 1;
-  ret += !!x;
-  x >>= 1;
-  ret += !!x;
-  x >>= 1;
-  ret += !!x;
-  x >>= 1;
-  ret += !!x;
-  x >>= 1;
-  ret += !!x;
-  x >>= 1;
-  ret += !!x;
-  x >>= 1;
-  ret += !!x;
-  x >>= 1;
-  ret += !!x;
-  x >>= 1;
-  ret += !!x;
-  x >>= 1;
-  ret += !!x;
-  x >>= 1;
-  ret += !!x;
-  x >>= 1;
-  ret += !!x;
-  x >>= 1;
-  ret += !!x;
-  x >>= 1;
-  ret += !!x;
-  x >>= 1;
-  ret += !!x;
-  return ret;
+  return 2;
 }
 /*
  * float_neg - Return bit-level equivalent of expression -f for
