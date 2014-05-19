@@ -413,37 +413,31 @@ unsigned float_neg(unsigned uf) {
  */
 unsigned float_i2f(int x) {
   unsigned ret = 0;
-  int sign_x;
+  int sign_x, Exp, frac;
+  int MSB_pos, LSB_pos;
+  int LSB_mask, mask;
+  int half, round_num;
   int temp;
-  int cnt;
-  int MSB_pos;
-  int LSB_pos;
-  int LSB_mask;
-  int mask;
-  int half;
-  int round_num;
-  int Exp;
-  int frac;
-  // printf("Original Hex: %x\n", x);
+
+  unsigned mask_31 = 1 << 31;
+  unsigned logical_shitf_mask = mask_31 - 1;
+
   // special case x = 0
   if (!x) return x;
 
   // Get Sign
-  sign_x = (x >> 31) & 0x1;
-  if (sign_x) {
+  ret = ret | (x & mask_31);
+  if (ret) {
     x = -x;
   }
-  ret = ret | (sign_x << 31);
 
   temp = x;
-  // count number of bits from 31 to MSB, cnt = 31 - MSB_Position(0-index)
-  cnt = 0;
-  while ( !(temp & (1 << 31)) ) {
-    cnt = cnt + 1;
-    temp = temp << 1;
+  MSB_pos = 0;
+  while (temp = (temp >> 1) & logical_shitf_mask) {
+    MSB_pos += 1;
   }
+  // MSB_pos -= 1;
 
-  MSB_pos = 31 - cnt;
   // When MSB in the position of i (0-index),
   // we will need i bits for fraction to maintain the accuracy
   // In the case of single precise floating-point, we will have
@@ -468,16 +462,14 @@ unsigned float_i2f(int x) {
   }
 
   // recompute the cnt and MSB_pos
+  MSB_pos = 0;
   temp = x;
-  cnt = 0;
-  while ( !(temp & (1 << 31)) ) {
-    cnt = cnt + 1;
-    temp = temp << 1;
+  while (temp = (temp >> 1) & logical_shitf_mask) {
+    // temp = (temp >> 1) & logical_shitf_mask;
+    // if (!temp) break;
+    MSB_pos += 1;
   }
-
-  MSB_pos = 31 - cnt;
   Exp = MSB_pos + 127;
-
   // shitf the MSB out then shit the new MSB into position 22 (0-index)
   frac = x << (32 - MSB_pos) >> 9; // 9 = 31 - 22
 
