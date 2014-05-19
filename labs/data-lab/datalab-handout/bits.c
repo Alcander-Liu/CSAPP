@@ -424,5 +424,23 @@ unsigned float_i2f(int x) {
  *   Rating: 4
  */
 unsigned float_twice(unsigned uf) {
-  return 2;
+  int exp, frac;
+  exp = (uf >> 23) & 0xFF;
+  frac = uf & 0x7fffff;
+
+  // NaN and Inf Case
+  if (exp == 0xFF) {
+    return uf;
+  }
+
+  // Denormalized case
+  if (exp == 0x00) {
+    uf &=  0xFF800000;
+    uf += (frac << 1);
+    return uf;
+  }
+
+  // Normal Case
+  uf += 0x800000;
+  return uf;
 }
