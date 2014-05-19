@@ -227,11 +227,12 @@ int bang(int x) {
     Since we know that -1 >> 1 = -1, so apply >> 1 to the negative number
    */
 
+  int x_m_1;
   // Only apply >> 1 to the negative number, if it is positive number keep
   // the original number
   x >>= (x >> 31) & 0x01;
   // x minus 1
-  int x_m_1 = x + (~1) + 1; // x - 1
+  x_m_1 = x + (~1) + 1; // x - 1
   return (x ^ x_m_1) >> 31 & 0x01;
 }
 /*
