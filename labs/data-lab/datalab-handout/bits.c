@@ -421,50 +421,52 @@ unsigned float_i2f(int x) {
 
   unsigned mask_31 = 0x80000000;
   unsigned logical_shitf_mask = 0x7fffffff;
-  if (!x) return 0;
- // Get Sign
-  ret = x & mask_31;
-  if (ret) {
-    x = -x;
-  }
-
-  temp = x;
-  MSB_pos = 0;
-  while (temp = (temp >> 1) & logical_shitf_mask) {
-    MSB_pos += 1;
-  }
-
-  // When MSB in the position of i (0-index),
-  // we will need i bits for fraction to maintain the accuracy
-  // In the case of single precise floating-point, we will have
-  // 23 bits (0 ~ 22) for fraction number. So the Maximun Position of MSB
-  // is 23 (0-index) due to the implied leading 1 presentation:
-  // 1.abcdefg... => .abcdefg..., we dont need to store the MSB
-  if (MSB_pos > 23) {
-    // fraction bits are not engough,
-    // so we have to perform rounding: Round-To-Even
-    LSB_pos = MSB_pos - 23;
-    LSB_mask = 1 << LSB_pos;
-    mask = LSB_mask - 1;
-    half = 1 << (LSB_pos - 1);
-
-    round_num = x & mask;
-    // x = x & ~(mask);
-    if ( round_num > half || (round_num == half && (x & LSB_mask)) ) {
-      x = x + LSB_mask;
+  if (x) {
+   // Get Sign
+    ret = x & mask_31;
+    if (ret) {
+      x = -x;
     }
+
+    temp = x;
+    MSB_pos = 0;
+    while (temp = (temp >> 1) & logical_shitf_mask) {
+      MSB_pos += 1;
+    }
+
+    // When MSB in the position of i (0-index),
+    // we will need i bits for fraction to maintain the accuracy
+    // In the case of single precise floating-point, we will have
+    // 23 bits (0 ~ 22) for fraction number. So the Maximun Position of MSB
+    // is 23 (0-index) due to the implied leading 1 presentation:
+    // 1.abcdefg... => .abcdefg..., we dont need to store the MSB
+    if (MSB_pos > 23) {
+      // fraction bits are not engough,
+      // so we have to perform rounding: Round-To-Even
+      LSB_pos = MSB_pos - 23;
+      LSB_mask = 1 << LSB_pos;
+      mask = LSB_mask - 1;
+      half = 1 << (LSB_pos - 1);
+
+      round_num = x & mask;
+      // x = x & ~(mask);
+      if ( round_num > half || (round_num == half && (x & LSB_mask)) ) {
+        x = x + LSB_mask;
+      }
+    }
+
+    MSB_pos += ! (x >> MSB_pos & 0x1);
+    Exp = MSB_pos + 127;
+    // shitf the MSB out then shit the new MSB into position 22 (0-index)
+    frac = x << (32 - MSB_pos) >> 9; // 9 = 31 - 22
+
+    // the right shitf should be logical shitft (add 0)
+    frac = frac & 0x7fffff;
+
+    return ret | Exp << 23 | frac;
+  } else {
+    return 0;
   }
-
-  MSB_pos += ! (x >> MSB_pos & 0x1);
-  Exp = MSB_pos + 127;
-  // shitf the MSB out then shit the new MSB into position 22 (0-index)
-  frac = x << (32 - MSB_pos) >> 9; // 9 = 31 - 22
-
-  // the right shitf should be logical shitft (add 0)
-  frac = frac & 0x7fffff;
-  // frac = frac & ( (1 << 23) - 1);
-
-  return ret | Exp << 23 | frac;
 }
 /*
  * float_twice - Return bit-level equivalent of expression 2*f for
