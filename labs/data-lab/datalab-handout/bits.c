@@ -412,27 +412,38 @@ unsigned float_neg(unsigned uf) {
  *   Rating: 4
  */
 unsigned float_i2f(int x) {
+  unsigned ret = 0;
+  int sign_x;
+  int temp;
+  int cnt;
+  int MSB_pos;
+  int LSB_pos;
+  int LSB_mask;
+  int mask;
+  int half;
+  int round_num;
+  int Exp;
+  int frac;
   // printf("Original Hex: %x\n", x);
   // special case x = 0
   if (!x) return x;
 
-  unsigned ret = 0;
   // Get Sign
-  int sign_x = (x >> 31) & 0x1;
+  sign_x = (x >> 31) & 0x1;
   if (sign_x) {
     x = -x;
   }
   ret = ret | (sign_x << 31);
 
-  int temp = x;
+  temp = x;
   // count number of bits from 31 to MSB, cnt = 31 - MSB_Position(0-index)
-  int cnt = 0;
+  cnt = 0;
   while ( !(temp & (1 << 31)) ) {
     cnt = cnt + 1;
     temp = temp << 1;
   }
 
-  int MSB_pos = 31 - cnt;
+  MSB_pos = 31 - cnt;
   // When MSB in the position of i (0-index),
   // we will need i bits for fraction to maintain the accuracy
   // In the case of single precise floating-point, we will have
@@ -444,12 +455,12 @@ unsigned float_i2f(int x) {
     // so we have to perform rounding: Round-To-Even
 
     // The postion of LBS (0-index)
-    int LSB_pos = MSB_pos - 23;
-    int LSB_mask = 1 << LSB_pos;
-    int mask = LSB_mask - 1;
-    int half = 1 << (LSB_pos - 1);
+    LSB_pos = MSB_pos - 23;
+    LSB_mask = 1 << LSB_pos;
+    mask = LSB_mask - 1;
+    half = 1 << (LSB_pos - 1);
 
-    int round_num = x & mask;
+    round_num = x & mask;
     x = x & ~(mask);
     if ( round_num > half || (round_num == half && (x & LSB_mask)) ) {
       x = x + LSB_mask;
@@ -465,10 +476,10 @@ unsigned float_i2f(int x) {
   }
 
   MSB_pos = 31 - cnt;
-  int Exp = MSB_pos + 127;
+  Exp = MSB_pos + 127;
 
   // shitf the MSB out then shit the new MSB into position 22 (0-index)
-  int frac = x << (32 - MSB_pos) >> 9; // 9 = 31 - 22
+  frac = x << (32 - MSB_pos) >> 9; // 9 = 31 - 22
 
   // the right shitf should be logical shitft (add 0)
   frac = frac & ((1 << 23) - 1);
