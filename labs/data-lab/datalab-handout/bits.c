@@ -415,22 +415,18 @@ unsigned float_i2f(int x) {
   unsigned ret = 0;
   int Exp, frac;
   int MSB_pos, LSB_pos;
-  int LSB_mask, mask;
+  int LSB_mask, drop_mask;
   int half, round_num;
   int temp;
-
-  unsigned mask_31 = 0x80000000;
-  unsigned logical_shitf_mask = 0x7fffffff;
   if (x) {
    // Get Sign
-    ret = x & mask_31;
+    ret = x & 0x80000000;
     if (ret) {
       x = -x;
     }
-
     temp = x;
     MSB_pos = 0;
-    while (temp = (temp >> 1) & logical_shitf_mask) {
+    while (temp = (temp >> 1) & 0x7fffffff) {
       MSB_pos += 1;
     }
 
@@ -445,18 +441,22 @@ unsigned float_i2f(int x) {
       // so we have to perform rounding: Round-To-Even
       LSB_pos = MSB_pos - 23;
       LSB_mask = 1 << LSB_pos;
-      mask = LSB_mask - 1;
+      drop_mask = LSB_mask - 1;
       half = 1 << (LSB_pos - 1);
 
-      round_num = x & mask;
+      round_num = x & drop_mask;
       // x = x & ~(mask);
       if ( round_num > half || (round_num == half && (x & LSB_mask)) ) {
         x = x + LSB_mask;
       }
     }
 
+    // if MSB whether MSB is change due to the rounding
     MSB_pos += ! (x >> MSB_pos & 0x1);
+
+    // Calculate Exp
     Exp = MSB_pos + 127;
+
     // shitf the MSB out then shit the new MSB into position 22 (0-index)
     frac = x << (32 - MSB_pos) >> 9; // 9 = 31 - 22
 
