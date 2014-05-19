@@ -181,8 +181,7 @@ int logicalShift(int x, int n) {
     since we cannot use -, we use + ((~n) + 1) instead
   */
   x >>= n;
-  int mask = ~(~(~0 << n) << (32 + ~n + 1));
-  return x & mask;
+  return x & ~(~(~0 << n) << (32 + ~n + 1));
 }
 /*
  * bitCount - returns count of number of 1's in word
@@ -317,7 +316,71 @@ int isLessOrEqual(int x, int y) {
  *   Rating: 4
  */
 int ilog2(int x) {
-  return 2;
+  // TODO: reduce operation
+  int ret = 0;
+  x >>= 1;
+  ret += !!x;
+  x >>= 1;
+  ret += !!x;
+  x >>= 1;
+  ret += !!x;
+  x >>= 1;
+  ret += !!x;
+  x >>= 1;
+  ret += !!x;
+  x >>= 1;
+  ret += !!x;
+  x >>= 1;
+  ret += !!x;
+  x >>= 1;
+  ret += !!x;
+  x >>= 1;
+  ret += !!x;
+  x >>= 1;
+  ret += !!x;
+  x >>= 1;
+  ret += !!x;
+  x >>= 1;
+  ret += !!x;
+  x >>= 1;
+  ret += !!x;
+  x >>= 1;
+  ret += !!x;
+  x >>= 1;
+  ret += !!x;
+  x >>= 1;
+  ret += !!x;
+  x >>= 1;
+  ret += !!x;
+  x >>= 1;
+  ret += !!x;
+  x >>= 1;
+  ret += !!x;
+  x >>= 1;
+  ret += !!x;
+  x >>= 1;
+  ret += !!x;
+  x >>= 1;
+  ret += !!x;
+  x >>= 1;
+  ret += !!x;
+  x >>= 1;
+  ret += !!x;
+  x >>= 1;
+  ret += !!x;
+  x >>= 1;
+  ret += !!x;
+  x >>= 1;
+  ret += !!x;
+  x >>= 1;
+  ret += !!x;
+  x >>= 1;
+  ret += !!x;
+  x >>= 1;
+  ret += !!x;
+  x >>= 1;
+  ret += !!x;
+  return ret;
 }
 /*
  * float_neg - Return bit-level equivalent of expression -f for
@@ -331,8 +394,14 @@ int ilog2(int x) {
  *   Rating: 2
  */
 unsigned float_neg(unsigned uf) {
- return 2;
+ int t = (uf >> 22) & 0xFF;
+ if (!(t ^ 0xFF) && (uf << 9) >> 9) {
+   return uf;
+ } else {
+  return (1 << 31) ^ uf;
+ }
 }
+
 /*
  * float_i2f - Return bit-level equivalent of expression (float) x
  *   Result is returned as unsigned int, but
@@ -343,7 +412,68 @@ unsigned float_neg(unsigned uf) {
  *   Rating: 4
  */
 unsigned float_i2f(int x) {
-  return 2;
+  // printf("Original Hex: %x\n", x);
+  // special case x = 0
+  if (!x) return x;
+
+  unsigned ret = 0;
+  // Get Sign
+  int sign_x = (x >> 31) & 0x1;
+  if (sign_x) {
+    x = -x;
+  }
+  ret |= sign_x << 31;
+
+  int temp = x;
+  // count number of bits from 31 to MSB, cnt = 31 - MSB_Position(0-index)
+  int cnt = 0;
+  while ( !(temp & (1 << 31)) ) {
+    cnt += 1;
+    temp <<= 1;
+  }
+
+  int MSB_pos = 31 - cnt;
+  // When MSB in the position of i (0-index),
+  // we will need i bits for fraction to maintain the accuracy
+  // In the case of single precise floating-point, we will have
+  // 23 bits (0 ~ 22) for fraction number. So the Maximun Position of MSB
+  // is 23 (0-index) due to the implied leading 1 presentation:
+  // 1.abcdefg... => .abcdefg..., we dont need to store the MSB
+  if (MSB_pos > 23) {
+    // fraction bits are not engough,
+    // so we have to perform rounding: Round-To-Even
+
+    // The postion of LBS (0-index)
+    int LSB_pos = MSB_pos - 23;
+    int LSB_mask = 1 << LSB_pos;
+    int mask = LSB_mask - 1;
+    int half = 1 << (LSB_pos - 1);
+
+    int round_num = x & mask;
+    x &= ~(mask); // clear the bits
+    if ( round_num > half || (round_num == half && (x & LSB_mask)) ) {
+      x += LSB_mask;
+    }
+  }
+
+  // recompute the cnt and MSB_pos
+  temp = x;
+  cnt = 0;
+  while ( !(temp & (1 << 31)) ) {
+    cnt += 1;
+    temp <<= 1;
+  }
+
+  MSB_pos = 31 - cnt;
+  int Exp = MSB_pos + 127;
+
+  // shitf the MSB out then shit the new MSB into position 22 (0-index)
+  int frac = x << (32 - MSB_pos) >> 9; // 9 = 31 - 22
+
+  // the right shitf should be logical shitft (add 0)
+  frac &= (1 << 23) - 1;
+
+  return ret | Exp << 23 | frac;
 }
 /*
  * float_twice - Return bit-level equivalent of expression 2*f for
