@@ -191,11 +191,15 @@ int logicalShift(int x, int n) {
  *   Rating: 4
  */
 int bitCount(int x) {
-  int mask1 = 0x55 << 8 | 0x55; mask1 = mask1 << 16 | mask1;
-  int mask2 = 0x33 << 8 | 0x33; mask2 = mask2 << 16 | mask2;
-  int mask3 = 0x0F << 8 | 0x0F; mask3 = mask3 << 16 | mask3;
-  int mask4 = 0xFF << 16 | 0xFF;
-  int mask5 = 0xFF << 8 | 0xFF;
+  int mask1, mask2, mask3, mask4, mask5;
+  mask1 = 0x55 << 8 | 0x55;
+  mask1 = mask1 << 16 | mask1;
+  mask2 = 0x33 << 8 | 0x33;
+  mask2 = mask2 << 16 | mask2;
+  mask3 = 0x0F << 8 | 0x0F;
+  mask3 = mask3 << 16 | mask3;
+  mask4 = 0xFF << 16 | 0xFF;
+  mask5 = 0xFF << 8 | 0xFF;
 
   x = (x & mask1) + ((x >> 1) & mask1);
   x = (x & mask2) + ((x >> 2) & mask2);
