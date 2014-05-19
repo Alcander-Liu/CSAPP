@@ -314,7 +314,7 @@ int isLessOrEqual(int x, int y) {
   int sign_x = (x >> 31) & 0x1;
   int sign_y = (y >> 31) & 0x1;
   int sign_y_x = ((y + (~x) + 1) >> 31) & 0x1;
-  return !(x+(~y)+1) | ((sign_x ^ sign_y) & sign_x) | (!(sign_x ^ sign_y) & !sign_y_x);
+  return (!(x+(~y)+1)) | ((sign_x ^ sign_y) & sign_x) | (!(sign_x ^ sign_y) & !sign_y_x);
 }
 /*
  * ilog2 - return floor(log base 2 of x), where x > 0
@@ -324,7 +324,32 @@ int isLessOrEqual(int x, int y) {
  *   Rating: 4
  */
 int ilog2(int x) {
-  return 2;
+  // ilog2 = MSB_pos
+  int mask1, mask2, mask3, mask4, mask5;
+  // Make all 0 ~ MSB to 1
+  x = x | (x >> 1);
+  x = x | (x >> 2);
+  x = x | (x >> 4);
+  x = x | (x >> 8);
+  x = x | (x >> 16);
+
+  // use the bitCount to count how many bits in current x
+  // so result will be x - 1
+  mask1 = 0x55 << 8 | 0x55;
+  mask1 = mask1 << 16 | mask1;
+  mask2 = 0x33 << 8 | 0x33;
+  mask2 = mask2 << 16 | mask2;
+  mask3 = 0x0F << 8 | 0x0F;
+  mask3 = mask3 << 16 | mask3;
+  mask4 = 0xFF << 16 | 0xFF;
+  mask5 = 0xFF << 8 | 0xFF;
+
+  x = (x & mask1) + ((x >> 1) & mask1);
+  x = (x & mask2) + ((x >> 2) & mask2);
+  x = (x & mask3) + ((x >> 4) & mask3);
+  x = (x & mask4) + ((x >> 8) & mask4);
+  x = (x & mask5) + ((x >> 16) & mask5);
+  return x + (~1) + 1;
 }
 /*
  * float_neg - Return bit-level equivalent of expression -f for
@@ -370,7 +395,7 @@ unsigned float_i2f(int x) {
     }
     temp = x;
     MSB_pos = 0;
-    while (temp = (temp >> 1) & 0x7fffffff) {
+    while ( (temp = (temp >> 1) & 0x7fffffff) ) {
       MSB_pos += 1;
     }
 
