@@ -690,6 +690,14 @@ Disassembly of section .text:
  8048d95:	8d 76 00             	lea    0x0(%esi),%esi
 
 ; =========================== Phase 6
+; Linked List
+; struct Node {
+;     int var;
+;     int id;
+;     Node* next;
+; };
+; node1->node2->node3->node4->node5->node6
+; 0x0804b26c->0x0804b260->0x0804b254->0x0804b248->0x0804b23c->0x0804b230
 08048d98 <phase_6>:
  8048d98:	55                   	push   %ebp
  8048d99:	89 e5                	mov    %esp,%ebp
