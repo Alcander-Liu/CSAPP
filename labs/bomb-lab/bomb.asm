@@ -343,6 +343,7 @@ Disassembly of section .text:
  8048aa1:	e8 f2 00 00 00       	call   8048b98 <phase_3>
  8048aa6:	e8 81 0a 00 00       	call   804952c <phase_defused>
 
+ ; phase 4
  8048aab:	83 c4 f4             	add    $0xfffffff4,%esp
  8048aae:	68 3f 97 04 08       	push   $0x804973f
  8048ab3:	e8 58 fd ff ff       	call   8048810 <printf@plt>
@@ -553,28 +554,42 @@ Disassembly of section .text:
  8048c9e:	5d                   	pop    %ebp
  8048c9f:	c3                   	ret
 
+; Fi-Ser
+; int func4(int arg) {
+;     if (arg <= 1) return 1;
+;     return func4(arg - 1) + func4(arg - 2);
+; }
+;
+; func4(9) = 55
 08048ca0 <func4>:
  8048ca0:	55                   	push   %ebp
  8048ca1:	89 e5                	mov    %esp,%ebp
  8048ca3:	83 ec 10             	sub    $0x10,%esp
+
+                                    ; callee save
  8048ca6:	56                   	push   %esi
  8048ca7:	53                   	push   %ebx
- 8048ca8:	8b 5d 08             	mov    0x8(%ebp),%ebx
+
+ 8048ca8:	8b 5d 08             	mov    0x8(%ebp),%ebx ; get arg
  8048cab:	83 fb 01             	cmp    $0x1,%ebx
- 8048cae:	7e 20                	jle    8048cd0 <func4+0x30>
+ 8048cae:	7e 20                	jle    8048cd0 <func4+0x30> ; if ebx <= 1 return 1
  8048cb0:	83 c4 f4             	add    $0xfffffff4,%esp
- 8048cb3:	8d 43 ff             	lea    -0x1(%ebx),%eax
+ 8048cb3:	8d 43 ff             	lea    -0x1(%ebx),%eax      ;
  8048cb6:	50                   	push   %eax
- 8048cb7:	e8 e4 ff ff ff       	call   8048ca0 <func4>
+ 8048cb7:	e8 e4 ff ff ff       	call   8048ca0 <func4>      ; %esi = func4(ebx - 1)
  8048cbc:	89 c6                	mov    %eax,%esi
  8048cbe:	83 c4 f4             	add    $0xfffffff4,%esp
+
  8048cc1:	8d 43 fe             	lea    -0x2(%ebx),%eax
  8048cc4:	50                   	push   %eax
- 8048cc5:	e8 d6 ff ff ff       	call   8048ca0 <func4>
+ 8048cc5:	e8 d6 ff ff ff       	call   8048ca0 <func4>      ; return esi + func4(ebx - 2)
  8048cca:	01 f0                	add    %esi,%eax
  8048ccc:	eb 07                	jmp    8048cd5 <func4+0x35>
+
  8048cce:	89 f6                	mov    %esi,%esi
- 8048cd0:	b8 01 00 00 00       	mov    $0x1,%eax
+ 8048cd0:	b8 01 00 00 00       	mov    $0x1,%eax ; return 1
+
+                                    ; restore ebx, esi
  8048cd5:	8d 65 e8             	lea    -0x18(%ebp),%esp
  8048cd8:	5b                   	pop    %ebx
  8048cd9:	5e                   	pop    %esi
@@ -587,31 +602,43 @@ Disassembly of section .text:
  8048ce0:	55                   	push   %ebp
  8048ce1:	89 e5                	mov    %esp,%ebp
  8048ce3:	83 ec 18             	sub    $0x18,%esp
- 8048ce6:	8b 55 08             	mov    0x8(%ebp),%edx
+ 8048ce6:	8b 55 08             	mov    0x8(%ebp),%edx    ;input string
  8048ce9:	83 c4 fc             	add    $0xfffffffc,%esp
- 8048cec:	8d 45 fc             	lea    -0x4(%ebp),%eax
- 8048cef:	50                   	push   %eax
- 8048cf0:	68 08 98 04 08       	push   $0x8049808
- 8048cf5:	52                   	push   %edx
+ 8048cec:	8d 45 fc             	lea    -0x4(%ebp),%eax   ;&var1
+ 8048cef:	50                   	push   %eax              ;&var1
+ 8048cf0:	68 08 98 04 08       	push   $0x8049808        ; "%d"
+ 8048cf5:	52                   	push   %edx              ; input string
  8048cf6:	e8 65 fb ff ff       	call   8048860 <sscanf@plt>
  8048cfb:	83 c4 10             	add    $0x10,%esp
  8048cfe:	83 f8 01             	cmp    $0x1,%eax
  8048d01:	75 06                	jne    8048d09 <phase_4+0x29>
- 8048d03:	83 7d fc 00          	cmpl   $0x0,-0x4(%ebp)
+ 8048d03:	83 7d fc 00          	cmpl   $0x0,-0x4(%ebp)    ; > 0
  8048d07:	7f 05                	jg     8048d0e <phase_4+0x2e>
  8048d09:	e8 ee 07 00 00       	call   80494fc <explode_bomb>
+ ;
  8048d0e:	83 c4 f4             	add    $0xfffffff4,%esp
  8048d11:	8b 45 fc             	mov    -0x4(%ebp),%eax
  8048d14:	50                   	push   %eax
  8048d15:	e8 86 ff ff ff       	call   8048ca0 <func4>
  8048d1a:	83 c4 10             	add    $0x10,%esp
- 8048d1d:	83 f8 37             	cmp    $0x37,%eax
+ 8048d1d:	83 f8 37             	cmp    $0x37,%eax ; ret = 55
  8048d20:	74 05                	je     8048d27 <phase_4+0x47>
  8048d22:	e8 d5 07 00 00       	call   80494fc <explode_bomb>
  8048d27:	89 ec                	mov    %ebp,%esp
  8048d29:	5d                   	pop    %ebp
  8048d2a:	c3                   	ret
  8048d2b:	90                   	nop
+
+; char buffer[8];
+; for (int i = 0; i <= 5; ++i) {
+;     unsigned char idx = input_string[i] & 0x0F;
+;     // table = "i s r v e a w h o b p n u t f g\260\001"
+;     buffer[i] = table[idx];
+; }
+; // buffer == "giants"
+; the lower 4 bit of each input ch should be f 0 5 b d 1,
+; so there can be many answers
+; o`ekma is one of them
 
 08048d2c <phase_5>:
  8048d2c:	55                   	push   %ebp
@@ -621,26 +648,31 @@ Disassembly of section .text:
  8048d33:	53                   	push   %ebx
  8048d34:	8b 5d 08             	mov    0x8(%ebp),%ebx
  8048d37:	83 c4 f4             	add    $0xfffffff4,%esp
+
  8048d3a:	53                   	push   %ebx
  8048d3b:	e8 d8 02 00 00       	call   8049018 <string_length>
  8048d40:	83 c4 10             	add    $0x10,%esp
- 8048d43:	83 f8 06             	cmp    $0x6,%eax
+ 8048d43:	83 f8 06             	cmp    $0x6,%eax ; string_len = 6
  8048d46:	74 05                	je     8048d4d <phase_5+0x21>
  8048d48:	e8 af 07 00 00       	call   80494fc <explode_bomb>
- 8048d4d:	31 d2                	xor    %edx,%edx
- 8048d4f:	8d 4d f8             	lea    -0x8(%ebp),%ecx
+
+ 8048d4d:	31 d2                	xor    %edx,%edx  ;edx = 0
+ 8048d4f:	8d 4d f8             	lea    -0x8(%ebp),%ecx ; ecx = &var
  8048d52:	be 20 b2 04 08       	mov    $0x804b220,%esi
- 8048d57:	8a 04 1a             	mov    (%edx,%ebx,1),%al
+                                    ; ebx = input_string
+ ; Loop
+ 8048d57:	8a 04 1a             	mov    (%edx,%ebx,1),%al ; al = ebx[edx] & 0x0F
  8048d5a:	24 0f                	and    $0xf,%al
- 8048d5c:	0f be c0             	movsbl %al,%eax
- 8048d5f:	8a 04 30             	mov    (%eax,%esi,1),%al
- 8048d62:	88 04 0a             	mov    %al,(%edx,%ecx,1)
- 8048d65:	42                   	inc    %edx
- 8048d66:	83 fa 05             	cmp    $0x5,%edx
+ 8048d5c:	0f be c0             	movsbl %al,%eax           ;
+ 8048d5f:	8a 04 30             	mov    (%eax,%esi,1),%al  ; table look up
+ 8048d62:	88 04 0a             	mov    %al,(%edx,%ecx,1)  ; fill buffer
+ 8048d65:	42                   	inc    %edx ; edx++
+ 8048d66:	83 fa 05             	cmp    $0x5,%edx ; edx <= 5
  8048d69:	7e ec                	jle    8048d57 <phase_5+0x2b>
+
  8048d6b:	c6 45 fe 00          	movb   $0x0,-0x2(%ebp)
  8048d6f:	83 c4 f8             	add    $0xfffffff8,%esp
- 8048d72:	68 0b 98 04 08       	push   $0x804980b
+ 8048d72:	68 0b 98 04 08       	push   $0x804980b ; "giants"
  8048d77:	8d 45 f8             	lea    -0x8(%ebp),%eax
  8048d7a:	50                   	push   %eax
  8048d7b:	e8 b0 02 00 00       	call   8049030 <strings_not_equal>
