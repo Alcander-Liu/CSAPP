@@ -363,6 +363,7 @@ Disassembly of section .text:
  8048ae6:	50                   	push   %eax
  8048ae7:	e8 40 02 00 00       	call   8048d2c <phase_5>
  8048aec:	e8 3b 0a 00 00       	call   804952c <phase_defused>
+
  8048af1:	83 c4 f4             	add    $0xfffffff4,%esp
  8048af4:	68 a0 97 04 08       	push   $0x80497a0
  8048af9:	e8 12 fd ff ff       	call   8048810 <printf@plt>
@@ -688,6 +689,7 @@ Disassembly of section .text:
  8048d94:	c3                   	ret
  8048d95:	8d 76 00             	lea    0x0(%esi),%esi
 
+; =========================== Phase 6
 08048d98 <phase_6>:
  8048d98:	55                   	push   %ebp
  8048d99:	89 e5                	mov    %esp,%ebp
@@ -696,78 +698,126 @@ Disassembly of section .text:
  8048d9f:	56                   	push   %esi
  8048da0:	53                   	push   %ebx
  8048da1:	8b 55 08             	mov    0x8(%ebp),%edx
- 8048da4:	c7 45 cc 6c b2 04 08 	movl   $0x804b26c,-0x34(%ebp)
+
+                                    ;      int var = 0x804b26c;
+ 8048da4:	c7 45 cc 6c b2 04 08 	movl   $0x804b26c,-0x34(%ebp) ;
  8048dab:	83 c4 f8             	add    $0xfffffff8,%esp
- 8048dae:	8d 45 e8             	lea    -0x18(%ebp),%eax
- 8048db1:	50                   	push   %eax
- 8048db2:	52                   	push   %edx
+ 8048dae:	8d 45 e8             	lea    -0x18(%ebp),%eax  ; arr
+ 8048db1:	50                   	push   %eax ; arr
+ 8048db2:	52                   	push   %edx ; input_string
  8048db3:	e8 20 02 00 00       	call   8048fd8 <read_six_numbers>
- 8048db8:	31 ff                	xor    %edi,%edi
+ 8048db8:	31 ff                	xor    %edi,%edi ; edi = 0
  8048dba:	83 c4 10             	add    $0x10,%esp
- 8048dbd:	8d 76 00             	lea    0x0(%esi),%esi
- 8048dc0:	8d 45 e8             	lea    -0x18(%ebp),%eax
- 8048dc3:	8b 04 b8             	mov    (%eax,%edi,4),%eax
- 8048dc6:	48                   	dec    %eax
+ 8048dbd:	8d 76 00             	lea    0x0(%esi),%esi ; ?
+
+ ; input six number should be different and both of all should be <= 5
+ ; for (int i = 0; i <= 5; ++i) {
+ ;    if (arr[i] > 5) explode_bomb();
+ ;    for (int j = i + 1; j <= 5; ++j) {
+ ;        if (arr[i] == arr[j]) {
+ ;            explode_bomb();
+ ;        }
+ ;    }
+ ; }
+
+ ; Begin Loop
+ ; loop1
+ 8048dc0:	8d 45 e8             	lea    -0x18(%ebp),%eax ; = &arr
+ 8048dc3:	8b 04 b8             	mov    (%eax,%edi,4),%eax ; eax = a[i]
+ 8048dc6:	48                   	dec    %eax ; --eax
  8048dc7:	83 f8 05             	cmp    $0x5,%eax
- 8048dca:	76 05                	jbe    8048dd1 <phase_6+0x39>
+ 8048dca:	76 05                	jbe    8048dd1 <phase_6+0x39> ; <= 5
  8048dcc:	e8 2b 07 00 00       	call   80494fc <explode_bomb>
- 8048dd1:	8d 5f 01             	lea    0x1(%edi),%ebx
+
+ 8048dd1:	8d 5f 01             	lea    0x1(%edi),%ebx ; ebx = edi + 1
  8048dd4:	83 fb 05             	cmp    $0x5,%ebx
  8048dd7:	7f 23                	jg     8048dfc <phase_6+0x64>
  8048dd9:	8d 04 bd 00 00 00 00 	lea    0x0(,%edi,4),%eax
- 8048de0:	89 45 c8             	mov    %eax,-0x38(%ebp)
- 8048de3:	8d 75 e8             	lea    -0x18(%ebp),%esi
- 8048de6:	8b 55 c8             	mov    -0x38(%ebp),%edx
- 8048de9:	8b 04 32             	mov    (%edx,%esi,1),%eax
- 8048dec:	3b 04 9e             	cmp    (%esi,%ebx,4),%eax
+ 8048de0:	89 45 c8             	mov    %eax,-0x38(%ebp)   ; = 4 * edi
+ 8048de3:	8d 75 e8             	lea    -0x18(%ebp),%esi   ; = &arr[0]
+
+ ; loop2
+ 8048de6:	8b 55 c8             	mov    -0x38(%ebp),%edx   ; = 4 * edi
+ 8048de9:	8b 04 32             	mov    (%edx,%esi,1),%eax ; = 4 * edi + esi
+ 8048dec:	3b 04 9e             	cmp    (%esi,%ebx,4),%eax ; (esi + 4 * ebx) != (4 * edi + esi)
  8048def:	75 05                	jne    8048df6 <phase_6+0x5e>
  8048df1:	e8 06 07 00 00       	call   80494fc <explode_bomb>
- 8048df6:	43                   	inc    %ebx
- 8048df7:	83 fb 05             	cmp    $0x5,%ebx
+
+ 8048df6:	43                   	inc    %ebx ; ebx++
+ 8048df7:	83 fb 05             	cmp    $0x5,%ebx ; ebx <= 5, goto loop2
  8048dfa:	7e ea                	jle    8048de6 <phase_6+0x4e>
- 8048dfc:	47                   	inc    %edi
- 8048dfd:	83 ff 05             	cmp    $0x5,%edi
+
+ 8048dfc:	47                   	inc    %edi; edi++
+ 8048dfd:	83 ff 05             	cmp    $0x5,%edi; edi <= 5, goto loop1
  8048e00:	7e be                	jle    8048dc0 <phase_6+0x28>
- 8048e02:	31 ff                	xor    %edi,%edi
- 8048e04:	8d 4d e8             	lea    -0x18(%ebp),%ecx
- 8048e07:	8d 45 d0             	lea    -0x30(%ebp),%eax
- 8048e0a:	89 45 c4             	mov    %eax,-0x3c(%ebp)
+ ; End Loop
+
+
+ ; char* buff = &[-0x30 + $ebp];
+ ; for (int i = 0; i <= 5; ++i) {
+ ;    char* head = 0x0804b260;
+ ;    for (int j = 1; j < arr[i]; ++j) {
+ ;        head = *(head + 8);
+ ;    }
+ ;    buff[i] = *head;
+ ; }
+ ; Begin Loop
+ 8048e02:	31 ff                	xor    %edi,%edi ; edi = 0
+ 8048e04:	8d 4d e8             	lea    -0x18(%ebp),%ecx ; = arr
+ 8048e07:	8d 45 d0             	lea    -0x30(%ebp),%eax ; eax = &[-0x30(ebp)]
+ 8048e0a:	89 45 c4             	mov    %eax,-0x3c(%ebp) ; [-0x3c(ebp)] = &[-0x30(ebp)]
  8048e0d:	8d 76 00             	lea    0x0(%esi),%esi
- 8048e10:	8b 75 cc             	mov    -0x34(%ebp),%esi
- 8048e13:	bb 01 00 00 00       	mov    $0x1,%ebx
- 8048e18:	8d 04 bd 00 00 00 00 	lea    0x0(,%edi,4),%eax
- 8048e1f:	89 c2                	mov    %eax,%edx
- 8048e21:	3b 1c 08             	cmp    (%eax,%ecx,1),%ebx
+
+ ; loop 3
+ 8048e10:	8b 75 cc             	mov    -0x34(%ebp),%esi ; esi = 0x0804b260
+ 8048e13:	bb 01 00 00 00       	mov    $0x1,%ebx        ; ebx = 1
+ 8048e18:	8d 04 bd 00 00 00 00 	lea    0x0(,%edi,4),%eax ; eax = 0
+ 8048e1f:	89 c2                	mov    %eax,%edx         ; edx = 0
+ 8048e21:	3b 1c 08             	cmp    (%eax,%ecx,1),%ebx ; 1 >= arr[0]
  8048e24:	7d 12                	jge    8048e38 <phase_6+0xa0>
- 8048e26:	8b 04 0a             	mov    (%edx,%ecx,1),%eax
- 8048e29:	8d b4 26 00 00 00 00 	lea    0x0(%esi,%eiz,1),%esi
- 8048e30:	8b 76 08             	mov    0x8(%esi),%esi
+
+ 8048e26:	8b 04 0a             	mov    (%edx,%ecx,1),%eax ; eax = arr[0] > 1
+ 8048e29:	8d b4 26 00 00 00 00 	lea    0x0(%esi,%eiz,1),%esi ; esi = 0x0804b260
+ ;loop 4
+ 8048e30:	8b 76 08             	mov    0x8(%esi),%esi ; esi = *(esi+8)
  8048e33:	43                   	inc    %ebx
- 8048e34:	39 c3                	cmp    %eax,%ebx
- 8048e36:	7c f8                	jl     8048e30 <phase_6+0x98>
- 8048e38:	8b 55 c4             	mov    -0x3c(%ebp),%edx
- 8048e3b:	89 34 ba             	mov    %esi,(%edx,%edi,4)
- 8048e3e:	47                   	inc    %edi
- 8048e3f:	83 ff 05             	cmp    $0x5,%edi
- 8048e42:	7e cc                	jle    8048e10 <phase_6+0x78>
- 8048e44:	8b 75 d0             	mov    -0x30(%ebp),%esi
- 8048e47:	89 75 cc             	mov    %esi,-0x34(%ebp)
- 8048e4a:	bf 01 00 00 00       	mov    $0x1,%edi
- 8048e4f:	8d 55 d0             	lea    -0x30(%ebp),%edx
- 8048e52:	8b 04 ba             	mov    (%edx,%edi,4),%eax
- 8048e55:	89 46 08             	mov    %eax,0x8(%esi)
- 8048e58:	89 c6                	mov    %eax,%esi
- 8048e5a:	47                   	inc    %edi
- 8048e5b:	83 ff 05             	cmp    $0x5,%edi
- 8048e5e:	7e f2                	jle    8048e52 <phase_6+0xba>
- 8048e60:	c7 46 08 00 00 00 00 	movl   $0x0,0x8(%esi)
- 8048e67:	8b 75 cc             	mov    -0x34(%ebp),%esi
- 8048e6a:	31 ff                	xor    %edi,%edi
+ 8048e34:	39 c3                	cmp    %eax,%ebx   ; ebx < arr[0]
+ 8048e36:	7c f8                	jl     8048e30 <phase_6+0x98> ; eax < ebx goto loop
+
+ 8048e38:	8b 55 c4             	mov    -0x3c(%ebp),%edx     ; edx = &[-0x30(ebp)]
+ 8048e3b:	89 34 ba             	mov    %esi,(%edx,%edi,4)   ; [-0x30(ebp) + 4 * edi] = esi
+ 8048e3e:	47                   	inc    %edi ; edi = edi + 1
+ 8048e3f:	83 ff 05             	cmp    $0x5,%edi ; edi <= 5
+ 8048e42:	7e cc                	jle    8048e10 <phase_6+0x78> ; goto loop3
+ ; End Loop
+
+ ; var = buff[0]
+ ; temp = buff[0];
+ ; for (int i = 1; i <= 5; ++i) {
+ ;    *(temp + 8) = buff[i];
+ ;    temp = buff[i];
+ ; }
+ 8048e44:	8b 75 d0             	mov    -0x30(%ebp),%esi ; esi = buff[0]
+ 8048e47:	89 75 cc             	mov    %esi,-0x34(%ebp) ; var = buff[0]
+ 8048e4a:	bf 01 00 00 00       	mov    $0x1,%edi        ; i = 1
+ 8048e4f:	8d 55 d0             	lea    -0x30(%ebp),%edx ; edx = &buff[0]
+ ; loop
+ 8048e52:	8b 04 ba             	mov    (%edx,%edi,4),%eax ;eax = buff[i]
+ 8048e55:	89 46 08             	mov    %eax,0x8(%esi)     ; *(buff[0] + 8) =  buff[i]
+ 8048e58:	89 c6                	mov    %eax,%esi          ;
+ 8048e5a:	47                   	inc    %edi ; ++i
+ 8048e5b:	83 ff 05             	cmp    $0x5,%edi ; i <= 5
+ 8048e5e:	7e f2                	jle    8048e52 <phase_6+0xba>; goto loop
+
+ 8048e60:	c7 46 08 00 00 00 00 	movl   $0x0,0x8(%esi) ; *(temp + 8) = 0
+ 8048e67:	8b 75 cc             	mov    -0x34(%ebp),%esi ; esi = buff[0]
+ 8048e6a:	31 ff                	xor    %edi,%edi        ; edi = 0
  8048e6c:	8d 74 26 00          	lea    0x0(%esi,%eiz,1),%esi
- 8048e70:	8b 56 08             	mov    0x8(%esi),%edx
- 8048e73:	8b 06                	mov    (%esi),%eax
- 8048e75:	3b 02                	cmp    (%edx),%eax
+ 8048e70:	8b 56 08             	mov    0x8(%esi),%edx ; edx = *(buff[0] + 8)
+ 8048e73:	8b 06                	mov    (%esi),%eax ;eax = *(buff[0])
+ 8048e75:	3b 02                	cmp    (%edx),%eax ; *(buff[0]) >= **(buff[0] + 8)
  8048e77:	7d 05                	jge    8048e7e <phase_6+0xe6>
+
  8048e79:	e8 7e 06 00 00       	call   80494fc <explode_bomb>
  8048e7e:	8b 76 08             	mov    0x8(%esi),%esi
  8048e81:	47                   	inc    %edi
