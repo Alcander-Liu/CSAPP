@@ -12,3 +12,5 @@ Computer Systems A Programmer's Perspective (深入理解计算机系统)
     2. bomb-lab (version: April 9, 2013)
        * Solved All phases + Secrete Phase
        * Add equivalent C annotation
+    3. buf-lab (version: Oct 15, 2013)
+       * Solved All levels
