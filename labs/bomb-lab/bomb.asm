@@ -345,7 +345,7 @@ Disassembly of section .text:
 
  ; phase 4
  8048aab:	83 c4 f4             	add    $0xfffffff4,%esp
- 8048aae:	68 3f 97 04 08       	push   $0x804973f
+ 8048aae:	68 3f 97 04 08       	push   $0x804973f ; "Halfway there!\n"
  8048ab3:	e8 58 fd ff ff       	call   8048810 <printf@plt>
  8048ab8:	83 c4 20             	add    $0x20,%esp
  8048abb:	e8 3c 07 00 00       	call   80491fc <read_line>
@@ -847,20 +847,32 @@ Disassembly of section .text:
  8048e90:	c3                   	ret
  8048e91:	8d 76 00             	lea    0x0(%esi),%esi
 
+; traverse a Binary Search Tree, return the index of the leaf (baesd 1 from left)
+; int fun7(int* root, int num) {
+;   if (num == 0) return 0;
+;   if (num == *p) return 0;
+;   if (num > *p) {
+;       return 2 * fun7(p + 8, num) + 1;
+;   }
+;   if (num < *p) {
+;       return 2 * fun7(p + 4, num);
+;   }
+
 08048e94 <fun7>:
  8048e94:	55                   	push   %ebp
  8048e95:	89 e5                	mov    %esp,%ebp
  8048e97:	83 ec 08             	sub    $0x8,%esp
- 8048e9a:	8b 55 08             	mov    0x8(%ebp),%edx
- 8048e9d:	8b 45 0c             	mov    0xc(%ebp),%eax
+ 8048e9a:	8b 55 08             	mov    0x8(%ebp),%edx ; $
+ 8048e9d:	8b 45 0c             	mov    0xc(%ebp),%eax ; input_num
  8048ea0:	85 d2                	test   %edx,%edx
- 8048ea2:	75 0c                	jne    8048eb0 <fun7+0x1c>
+ 8048ea2:	75 0c                	jne    8048eb0 <fun7+0x1c> ; edx != 0
  8048ea4:	b8 ff ff ff ff       	mov    $0xffffffff,%eax
  8048ea9:	eb 37                	jmp    8048ee2 <fun7+0x4e>
  8048eab:	90                   	nop
  8048eac:	8d 74 26 00          	lea    0x0(%esi,%eiz,1),%esi
+
  8048eb0:	3b 02                	cmp    (%edx),%eax
- 8048eb2:	7d 11                	jge    8048ec5 <fun7+0x31>
+ 8048eb2:	7d 11                	jge    8048ec5 <fun7+0x31> ; input >= 36
  8048eb4:	83 c4 f8             	add    $0xfffffff8,%esp
  8048eb7:	50                   	push   %eax
  8048eb8:	8b 42 04             	mov    0x4(%edx),%eax
@@ -868,8 +880,9 @@ Disassembly of section .text:
  8048ebc:	e8 d3 ff ff ff       	call   8048e94 <fun7>
  8048ec1:	01 c0                	add    %eax,%eax
  8048ec3:	eb 1d                	jmp    8048ee2 <fun7+0x4e>
+
  8048ec5:	3b 02                	cmp    (%edx),%eax
- 8048ec7:	74 17                	je     8048ee0 <fun7+0x4c>
+ 8048ec7:	74 17                	je     8048ee0 <fun7+0x4c> ; input = 36 return 0
  8048ec9:	83 c4 f8             	add    $0xfffffff8,%esp
  8048ecc:	50                   	push   %eax
  8048ecd:	8b 42 08             	mov    0x8(%edx),%eax
@@ -880,7 +893,9 @@ Disassembly of section .text:
  8048ed9:	eb 07                	jmp    8048ee2 <fun7+0x4e>
  8048edb:	90                   	nop
  8048edc:	8d 74 26 00          	lea    0x0(%esi,%eiz,1),%esi
+
  8048ee0:	31 c0                	xor    %eax,%eax
+
  8048ee2:	89 ec                	mov    %ebp,%esp
  8048ee4:	5d                   	pop    %ebp
  8048ee5:	c3                   	ret
@@ -893,22 +908,24 @@ Disassembly of section .text:
  8048eee:	53                   	push   %ebx
  8048eef:	e8 08 03 00 00       	call   80491fc <read_line>
  8048ef4:	6a 00                	push   $0x0
- 8048ef6:	6a 0a                	push   $0xa
- 8048ef8:	6a 00                	push   $0x0
+ 8048ef6:	6a 0a                	push   $0xa ; base 10
+ 8048ef8:	6a 00                	push   $0x0 ; null
  8048efa:	50                   	push   %eax
  8048efb:	e8 f0 f8 ff ff       	call   80487f0 <__strtol_internal@plt>
  8048f00:	83 c4 10             	add    $0x10,%esp
- 8048f03:	89 c3                	mov    %eax,%ebx
- 8048f05:	8d 43 ff             	lea    -0x1(%ebx),%eax
- 8048f08:	3d e8 03 00 00       	cmp    $0x3e8,%eax
+ 8048f03:	89 c3                	mov    %eax,%ebx ; ebx = input_num
+ 8048f05:	8d 43 ff             	lea    -0x1(%ebx),%eax ; eax = eax - 1
+ 8048f08:	3d e8 03 00 00       	cmp    $0x3e8,%eax     ; eax <= 0x3e8
  8048f0d:	76 05                	jbe    8048f14 <secret_phase+0x2c>
  8048f0f:	e8 e8 05 00 00       	call   80494fc <explode_bomb>
+
  8048f14:	83 c4 f8             	add    $0xfffffff8,%esp
- 8048f17:	53                   	push   %ebx
+
+ 8048f17:	53                   	push   %ebx ; ebx = input_num
  8048f18:	68 20 b3 04 08       	push   $0x804b320
  8048f1d:	e8 72 ff ff ff       	call   8048e94 <fun7>
  8048f22:	83 c4 10             	add    $0x10,%esp
- 8048f25:	83 f8 07             	cmp    $0x7,%eax
+ 8048f25:	83 f8 07             	cmp    $0x7,%eax ; fun7 = 7
  8048f28:	74 05                	je     8048f2f <secret_phase+0x47>
  8048f2a:	e8 cd 05 00 00       	call   80494fc <explode_bomb>
  8048f2f:	83 c4 f4             	add    $0xfffffff4,%esp
@@ -1470,11 +1487,11 @@ Disassembly of section .text:
  8049533:	83 3d 80 b4 04 08 06 	cmpl   $0x6,0x804b480
  804953a:	75 63                	jne    804959f <phase_defused+0x73>
  804953c:	8d 5d b0             	lea    -0x50(%ebp),%ebx
- 804953f:	53                   	push   %ebx
+ 804953f:	53                   	push   %ebx         ; save input string
  8049540:	8d 45 ac             	lea    -0x54(%ebp),%eax
- 8049543:	50                   	push   %eax
- 8049544:	68 03 9d 04 08       	push   $0x8049d03
- 8049549:	68 70 b7 04 08       	push   $0x804b770
+ 8049543:	50                   	push   %eax         ; save input number
+ 8049544:	68 03 9d 04 08       	push   $0x8049d03   ; "%d %s"
+ 8049549:	68 70 b7 04 08       	push   $0x804b770   ; 9
  804954e:	e8 0d f3 ff ff       	call   8048860 <sscanf@plt>
  8049553:	83 c4 10             	add    $0x10,%esp
  8049556:	83 f8 02             	cmp    $0x2,%eax
@@ -1494,6 +1511,7 @@ Disassembly of section .text:
  8049585:	e8 86 f2 ff ff       	call   8048810 <printf@plt>
  804958a:	83 c4 20             	add    $0x20,%esp
  804958d:	e8 56 f9 ff ff       	call   8048ee8 <secret_phase>
+
  8049592:	83 c4 f4             	add    $0xfffffff4,%esp
  8049595:	68 a0 9d 04 08       	push   $0x8049da0
  804959a:	e8 71 f2 ff ff       	call   8048810 <printf@plt>
