@@ -846,16 +846,21 @@ Disassembly of section .text:
  8048e8f:	5d                   	pop    %ebp
  8048e90:	c3                   	ret
  8048e91:	8d 76 00             	lea    0x0(%esi),%esi
-
+; Assume Node Struct
+; struct Node {
+;   int val;
+;   Node* left;
+;   Node* right;
+; }
 ; traverse a Binary Search Tree, return the index of the leaf (baesd 1 from left)
-; int fun7(int* root, int num) {
+; int fun7(int* node, int num) {
 ;   if (num == 0) return 0;
-;   if (num == *p) return 0;
-;   if (num > *p) {
-;       return 2 * fun7(p + 8, num) + 1;
+;   if (num == *node) return 0;
+;   if (num > *node) {
+;       return 2 * fun7(node->right, num) + 1;
 ;   }
-;   if (num < *p) {
-;       return 2 * fun7(p + 4, num);
+;   if (num < *node) {
+;       return 2 * fun7(node->left, num);
 ;   }
 
 08048e94 <fun7>:
