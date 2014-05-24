@@ -718,9 +718,9 @@ Disassembly of section .text:
  8048dba:	83 c4 10             	add    $0x10,%esp
  8048dbd:	8d 76 00             	lea    0x0(%esi),%esi ; ?
 
- ; input six number should be different and both of all should be <= 5
+ ; input six number should be different and both of all should be <= 6
  ; for (int i = 0; i <= 5; ++i) {
- ;    if (arr[i] > 5) explode_bomb();
+ ;    if ((unsigned)(arr[i]-1) > 5) explode_bomb();
  ;    for (int j = i + 1; j <= 5; ++j) {
  ;        if (arr[i] == arr[j]) {
  ;            explode_bomb();
