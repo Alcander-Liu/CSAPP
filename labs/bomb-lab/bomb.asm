@@ -763,11 +763,11 @@ Disassembly of section .text:
 
  ; char* buff = &[-0x30 + $ebp];
  ; for (int i = 0; i <= 5; ++i) {
- ;    char* head = 0x0804b260;
+ ;    curr = 0x0804b260;
  ;    for (int j = 1; j < arr[i]; ++j) {
- ;        head = *(head + 8);
+ ;        curr = curr->next;
  ;    }
- ;    buff[i] = *head;
+ ;    buff[i] = curr;
  ; }
  ; Begin Loop
  8048e02:	31 ff                	xor    %edi,%edi ; edi = 0
@@ -784,13 +784,13 @@ Disassembly of section .text:
  8048e21:	3b 1c 08             	cmp    (%eax,%ecx,1),%ebx ; 1 >= arr[0]
  8048e24:	7d 12                	jge    8048e38 <phase_6+0xa0>
 
- 8048e26:	8b 04 0a             	mov    (%edx,%ecx,1),%eax ; eax = arr[0] > 1
+ 8048e26:	8b 04 0a             	mov    (%edx,%ecx,1),%eax ; eax = arr[i] > 1
  8048e29:	8d b4 26 00 00 00 00 	lea    0x0(%esi,%eiz,1),%esi ; esi = 0x0804b260
  ;loop 4
  8048e30:	8b 76 08             	mov    0x8(%esi),%esi ; esi = *(esi+8)
  8048e33:	43                   	inc    %ebx
- 8048e34:	39 c3                	cmp    %eax,%ebx   ; ebx < arr[0]
- 8048e36:	7c f8                	jl     8048e30 <phase_6+0x98> ; eax < ebx goto loop
+ 8048e34:	39 c3                	cmp    %eax,%ebx   ; ebx < arr[i]
+ 8048e36:	7c f8                	jl     8048e30 <phase_6+0x98> ; eax < ebx goto loop 4
 
  8048e38:	8b 55 c4             	mov    -0x3c(%ebp),%edx     ; edx = &[-0x30(ebp)]
  8048e3b:	89 34 ba             	mov    %esi,(%edx,%edi,4)   ; [-0x30(ebp) + 4 * edi] = esi
@@ -799,31 +799,38 @@ Disassembly of section .text:
  8048e42:	7e cc                	jle    8048e10 <phase_6+0x78> ; goto loop3
  ; End Loop
 
- ; var = buff[0]
- ; temp = buff[0];
- ; for (int i = 1; i <= 5; ++i) {
- ;    *(temp + 8) = buff[i];
- ;    temp = buff[i];
+ ; head = buff[0];
+ ; int i = 1;
+ ; for (; i <= 5; ++i) {
+ ;    buff[i-1]->next = buff[i];
  ; }
- 8048e44:	8b 75 d0             	mov    -0x30(%ebp),%esi ; esi = buff[0]
- 8048e47:	89 75 cc             	mov    %esi,-0x34(%ebp) ; var = buff[0]
+ ; buff[i]->next = NULL;
+ 8048e47:	89 75 cc             	mov    %esi,-0x34(%ebp) ; head = &buff[0];
  8048e4a:	bf 01 00 00 00       	mov    $0x1,%edi        ; i = 1
  8048e4f:	8d 55 d0             	lea    -0x30(%ebp),%edx ; edx = &buff[0]
  ; loop
- 8048e52:	8b 04 ba             	mov    (%edx,%edi,4),%eax ;eax = buff[i]
- 8048e55:	89 46 08             	mov    %eax,0x8(%esi)     ; *(buff[0] + 8) =  buff[i]
+ 8048e52:	8b 04 ba             	mov    (%edx,%edi,4),%eax ; eax = buff[i]
+ 8048e55:	89 46 08             	mov    %eax,0x8(%esi)     ; buff[i-1]->next = buff[i];
  8048e58:	89 c6                	mov    %eax,%esi          ;
  8048e5a:	47                   	inc    %edi ; ++i
  8048e5b:	83 ff 05             	cmp    $0x5,%edi ; i <= 5
  8048e5e:	7e f2                	jle    8048e52 <phase_6+0xba>; goto loop
 
- 8048e60:	c7 46 08 00 00 00 00 	movl   $0x0,0x8(%esi) ; *(temp + 8) = 0
- 8048e67:	8b 75 cc             	mov    -0x34(%ebp),%esi ; esi = buff[0]
- 8048e6a:	31 ff                	xor    %edi,%edi        ; edi = 0
+ 8048e60:	c7 46 08 00 00 00 00 	movl   $0x0,0x8(%esi) ; las_node->next = 0
+ 8048e67:	8b 75 cc             	mov    -0x34(%ebp),%esi ; esi = head
+ 8048e6a:	31 ff                	xor    %edi,%edi        ; edi = o
  8048e6c:	8d 74 26 00          	lea    0x0(%esi,%eiz,1),%esi
- 8048e70:	8b 56 08             	mov    0x8(%esi),%edx ; edx = *(buff[0] + 8)
- 8048e73:	8b 06                	mov    (%esi),%eax ;eax = *(buff[0])
- 8048e75:	3b 02                	cmp    (%edx),%eax ; *(buff[0]) >= **(buff[0] + 8)
+
+ ; curr = buff[0];
+ ; for (int i = 0; i <= 4; ++i) {
+ ;    if (*curr < *(curr->next)) explode_bomb();
+ ;    curr = curr->next;
+ ; }
+ ; // so the input will "sort" the linked list by decending order
+ ; Loop
+ 8048e70:	8b 56 08             	mov    0x8(%esi),%edx ; edx = head->next
+ 8048e73:	8b 06                	mov    (%esi),%eax ; eax = *head;
+ 8048e75:	3b 02                	cmp    (%edx),%eax ; if (*head >= *head->next) goto
  8048e77:	7d 05                	jge    8048e7e <phase_6+0xe6>
 
  8048e79:	e8 7e 06 00 00       	call   80494fc <explode_bomb>
