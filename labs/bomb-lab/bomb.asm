@@ -382,6 +382,9 @@ Disassembly of section .text:
  8048b1e:	90                   	nop
  8048b1f:	90                   	nop
 
+; =============================================================================>
+; phase_1
+; =============================================================================>
 08048b20 <phase_1>:
  8048b20:	55                   	push   %ebp
  8048b21:	89 e5                	mov    %esp,%ebp
@@ -400,6 +403,9 @@ Disassembly of section .text:
  8048b46:	c3                   	ret
  8048b47:	90                   	nop
 
+; =============================================================================>
+; phase_2
+; =============================================================================>
 08048b48 <phase_2>:
  8048b48:	55                   	push   %ebp
  8048b49:	89 e5                	mov    %esp,%ebp
@@ -434,6 +440,9 @@ Disassembly of section .text:
  8048b96:	c3                   	ret
  8048b97:	90                   	nop
 
+; =============================================================================>
+; phase_3
+; =============================================================================>
 08048b98 <phase_3>:
  8048b98:	55                   	push   %ebp
  8048b99:	89 e5                	mov    %esp,%ebp
@@ -555,13 +564,15 @@ Disassembly of section .text:
  8048c9e:	5d                   	pop    %ebp
  8048c9f:	c3                   	ret
 
-; Fi-Ser
+
+; =============================================================================>
+; func4
+; =============================================================================>
+; Recursive Fibonacci
 ; int func4(int arg) {
 ;     if (arg <= 1) return 1;
 ;     return func4(arg - 1) + func4(arg - 2);
 ; }
-;
-; func4(9) = 55
 08048ca0 <func4>:
  8048ca0:	55                   	push   %ebp
  8048ca1:	89 e5                	mov    %esp,%ebp
@@ -599,6 +610,10 @@ Disassembly of section .text:
  8048cdd:	c3                   	ret
  8048cde:	89 f6                	mov    %esi,%esi
 
+; =============================================================================>
+; phase_4
+; =============================================================================>
+; find a n such that 55 == Fib(n)
 08048ce0 <phase_4>:
  8048ce0:	55                   	push   %ebp
  8048ce1:	89 e5                	mov    %esp,%ebp
@@ -630,6 +645,9 @@ Disassembly of section .text:
  8048d2a:	c3                   	ret
  8048d2b:	90                   	nop
 
+; =============================================================================>
+; phase_5
+; =============================================================================>
 ; char buffer[8];
 ; for (int i = 0; i <= 5; ++i) {
 ;     unsigned char idx = input_string[i] & 0x0F;
@@ -640,7 +658,6 @@ Disassembly of section .text:
 ; the lower 4 bit of each input ch should be f 0 5 b d 1,
 ; so there can be many answers
 ; o`ekma is one of them
-
 08048d2c <phase_5>:
  8048d2c:	55                   	push   %ebp
  8048d2d:	89 e5                	mov    %esp,%ebp
@@ -689,7 +706,11 @@ Disassembly of section .text:
  8048d94:	c3                   	ret
  8048d95:	8d 76 00             	lea    0x0(%esi),%esi
 
-; =========================== Phase 6
+; =============================================================================>
+; phase_6
+; =============================================================================>
+; linked list traverse
+; And sort the linked list in decending order based on the input 6 numbers
 ; Linked List
 ; struct Node {
 ;     int var;
@@ -846,6 +867,15 @@ Disassembly of section .text:
  8048e8f:	5d                   	pop    %ebp
  8048e90:	c3                   	ret
  8048e91:	8d 76 00             	lea    0x0(%esi),%esi
+
+; =============================================================================>
+; fun7
+; =============================================================================>
+; fun7 is used for return the index of leaf node of Binary Search Tree
+; index is counted from left and 1 based.
+;
+; Used command: /x 3wx edx
+;
 ; Assume Node Struct
 ; struct Node {
 ;   int val;
@@ -862,35 +892,34 @@ Disassembly of section .text:
 ;   if (num < *node) {
 ;       return 2 * fun7(node->left, num);
 ;   }
-
 08048e94 <fun7>:
  8048e94:	55                   	push   %ebp
  8048e95:	89 e5                	mov    %esp,%ebp
  8048e97:	83 ec 08             	sub    $0x8,%esp
- 8048e9a:	8b 55 08             	mov    0x8(%ebp),%edx ; $
- 8048e9d:	8b 45 0c             	mov    0xc(%ebp),%eax ; input_num
+ 8048e9a:	8b 55 08             	mov    0x8(%ebp),%edx ; node
+ 8048e9d:	8b 45 0c             	mov    0xc(%ebp),%eax ; num
  8048ea0:	85 d2                	test   %edx,%edx
- 8048ea2:	75 0c                	jne    8048eb0 <fun7+0x1c> ; edx != 0
+ 8048ea2:	75 0c                	jne    8048eb0 <fun7+0x1c> ; num != 0
  8048ea4:	b8 ff ff ff ff       	mov    $0xffffffff,%eax
  8048ea9:	eb 37                	jmp    8048ee2 <fun7+0x4e>
  8048eab:	90                   	nop
  8048eac:	8d 74 26 00          	lea    0x0(%esi,%eiz,1),%esi
 
  8048eb0:	3b 02                	cmp    (%edx),%eax
- 8048eb2:	7d 11                	jge    8048ec5 <fun7+0x31> ; input >= 36
+ 8048eb2:	7d 11                	jge    8048ec5 <fun7+0x31> ; num >= 36
  8048eb4:	83 c4 f8             	add    $0xfffffff8,%esp
  8048eb7:	50                   	push   %eax
- 8048eb8:	8b 42 04             	mov    0x4(%edx),%eax
+ 8048eb8:	8b 42 04             	mov    0x4(%edx),%eax      ; node->left
  8048ebb:	50                   	push   %eax
  8048ebc:	e8 d3 ff ff ff       	call   8048e94 <fun7>
  8048ec1:	01 c0                	add    %eax,%eax
  8048ec3:	eb 1d                	jmp    8048ee2 <fun7+0x4e>
 
  8048ec5:	3b 02                	cmp    (%edx),%eax
- 8048ec7:	74 17                	je     8048ee0 <fun7+0x4c> ; input = 36 return 0
+ 8048ec7:	74 17                	je     8048ee0 <fun7+0x4c> ; num = 36 return 0
  8048ec9:	83 c4 f8             	add    $0xfffffff8,%esp
  8048ecc:	50                   	push   %eax
- 8048ecd:	8b 42 08             	mov    0x8(%edx),%eax
+ 8048ecd:	8b 42 08             	mov    0x8(%edx),%eax      ; node->right
  8048ed0:	50                   	push   %eax
  8048ed1:	e8 be ff ff ff       	call   8048e94 <fun7>
  8048ed6:	01 c0                	add    %eax,%eax
@@ -906,6 +935,11 @@ Disassembly of section .text:
  8048ee5:	c3                   	ret
  8048ee6:	89 f6                	mov    %esi,%esi
 
+; =============================================================================>
+; secret_phase
+; =============================================================================>
+; input a number such that
+; its index of a corresponding node in a given BST equals to 7
 08048ee8 <secret_phase>:
  8048ee8:	55                   	push   %ebp
  8048ee9:	89 e5                	mov    %esp,%ebp
@@ -918,19 +952,19 @@ Disassembly of section .text:
  8048efa:	50                   	push   %eax
  8048efb:	e8 f0 f8 ff ff       	call   80487f0 <__strtol_internal@plt>
  8048f00:	83 c4 10             	add    $0x10,%esp
- 8048f03:	89 c3                	mov    %eax,%ebx ; ebx = input_num
+ 8048f03:	89 c3                	mov    %eax,%ebx ; ebx = num
  8048f05:	8d 43 ff             	lea    -0x1(%ebx),%eax ; eax = eax - 1
- 8048f08:	3d e8 03 00 00       	cmp    $0x3e8,%eax     ; eax <= 0x3e8
+ 8048f08:	3d e8 03 00 00       	cmp    $0x3e8,%eax
  8048f0d:	76 05                	jbe    8048f14 <secret_phase+0x2c>
  8048f0f:	e8 e8 05 00 00       	call   80494fc <explode_bomb>
 
  8048f14:	83 c4 f8             	add    $0xfffffff8,%esp
 
- 8048f17:	53                   	push   %ebx ; ebx = input_num
- 8048f18:	68 20 b3 04 08       	push   $0x804b320
+ 8048f17:	53                   	push   %ebx
+ 8048f18:	68 20 b3 04 08       	push   $0x804b320      ; root node of BST
  8048f1d:	e8 72 ff ff ff       	call   8048e94 <fun7>
  8048f22:	83 c4 10             	add    $0x10,%esp
- 8048f25:	83 f8 07             	cmp    $0x7,%eax ; fun7 = 7
+ 8048f25:	83 f8 07             	cmp    $0x7,%eax  ; the index should be 7
  8048f28:	74 05                	je     8048f2f <secret_phase+0x47>
  8048f2a:	e8 cd 05 00 00       	call   80494fc <explode_bomb>
  8048f2f:	83 c4 f4             	add    $0xfffffff4,%esp
