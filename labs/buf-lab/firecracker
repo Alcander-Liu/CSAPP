@@ -1,0 +1,11 @@
+
+firecracker.o:     file format elf32-i386
+
+
+Disassembly of section .text:
+
+00000000 <.text>:
+   0:	c7 05 ec c1 04 08 d1 	movl   $0x7cee92d1,0x804c1ec
+   7:	92 ee 7c 
+   a:	bc e0 34 68 55       	mov    $0x556834e0,%esp
+   f:	c3                   	ret    
