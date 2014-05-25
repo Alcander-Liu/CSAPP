@@ -762,7 +762,7 @@ Disassembly of section .text:
  8049161:	83 ec 28             	sub    $0x28,%esp
  8049164:	8d 45 e0             	lea    -0x20(%ebp),%eax
  8049167:	89 04 24             	mov    %eax,(%esp)
- 804916a:	e8 7b fa ff ff       	call   8048bea <Gets>
+ 804916a:	e8 7b fa ff ff       	call   8048b1ea <Gets>
  804916f:	b8 01 00 00 00       	mov    $0x1,%eax
  8049174:	c9                   	leave
  8049175:	c3                   	ret
