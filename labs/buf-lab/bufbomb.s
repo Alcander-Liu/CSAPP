@@ -752,6 +752,7 @@ Disassembly of section .text:
  8049140:	55                   	push   %ebp
  8049141:	89 e5                	mov    %esp,%ebp
  8049143:	81 ec 08 02 00 00    	sub    $0x208,%esp
+
  8049149:	8d 85 00 fe ff ff    	lea    -0x200(%ebp),%eax
  804914f:	89 04 24             	mov    %eax,(%esp)
  8049152:	e8 93 fa ff ff       	call   8048bea <Gets>
