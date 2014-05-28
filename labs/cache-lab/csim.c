@@ -6,6 +6,7 @@
 #include <unistd.h>
 
 #define ToStderr(format, ...) fprintf(stderr, format, __VA_ARGS__)
+const uint32_t LINE_BUFFER_LEN = 1024;
 typedef struct {
   int32_t hits;
   int32_t misses;
@@ -175,6 +176,9 @@ void LRUCacheParamsToString(const LRUCacheParams* params) {
   printf("Init Time Stamp: %llu\n", params->time_stamp);
 }
 
+void MemoryOperationToString(const MemoryOperation* ops) {
+  printf("%c %llx,%llu\n", ops->op, ops->address, ops->size);
+}
 // TODO:
 // arg parser
 // input file parser
@@ -203,6 +207,17 @@ int main(int argc, char* argv[]) {
   LRUCacheParamsToString(&cache_params);
 
   LRUCache** cache = InitLRUCache(&cache_params);
+
+  MemoryOperation memory_op;
+  freopen(args.trace_file, "r", stdin);
+  char* line = NULL;
+  size_t line_cap = 0;
+  ssize_t line_len = 0;
+  while ( (line_len = getline(&line, &line_cap, stdin)) != -1 ) {
+    if (line[0] != ' ') continue;
+    sscanf(line+1, "%c %llx,%llu", &memory_op.op, &memory_op.address, &memory_op.size);
+    MemoryOperationToString(&memory_op);
+  }
   DeallocateLRUCache(cache);
   printSummary(0, 0, 0);
   return 0;
