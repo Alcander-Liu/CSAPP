@@ -4,9 +4,9 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <unistd.h>
+#include <math.h>
 
 #define ToStderr(format, ...) fprintf(stderr, format, __VA_ARGS__)
-const uint32_t LINE_BUFFER_LEN = 1024;
 typedef struct {
   int32_t hits;
   int32_t misses;
@@ -24,7 +24,7 @@ typedef struct {
 
 typedef struct {
   bool valid_bit;
-  uint32_t tag_bit;
+  uint64_t tag;
   uint64_t time_stamp;
 } LRUCacheLine;
 
@@ -139,7 +139,8 @@ LRUCache** InitLRUCache(LRUCacheParams* params) {
     return NULL;
   }
 
-  cache[0] = (LRUCache*)malloc(S * E * sizeof(LRUCacheLine));
+  // allocate and init all to 0
+  cache[0] = (LRUCache*)calloc(S * E, sizeof(LRUCacheLine));
   if (cache[0] == NULL) {
     ToStderr("Error in allocate memory size: %lu bytes\n",
              S * E * sizeof(LRUCacheLine));
@@ -159,12 +160,83 @@ void DeallocateLRUCache(LRUCache** cache) {
   free(cache);
 }
 
+uint64_t AddressToTag(const LRUCacheParams* params, uint64_t address) {
+  return (address >> (64 - params->t_bits));
+}
+
+uint64_t AddressToSetIndex(const LRUCacheParams* params, uint64_t address) {
+  uint64_t mask = (1 << (64 - params->t_bits)) - 1; // clear tag bits
+  return (address & mask) >> params->b_bits; // get index
+}
+
 void LRUCacheSimulate(const MemoryOperation* memory_op,
                       LRUCache** cache,
-                      LRUCacheParams* paras,
+                      LRUCacheParams* params,
                       Stats* stats,
                       bool verbose) {
-  ;
+  uint64_t address = memory_op->address;
+  uint64_t set_index = AddressToSetIndex(params, address);
+  uint64_t tag = AddressToTag(params, address);
+  // printf("Tag = %lld, Set Index = %lld\n", tag, set_index);
+
+  uint32_t E = params->E;
+  uint32_t i = 0;
+  uint64_t min_op_time_idx = 0;
+
+  bool miss = true;
+  for (i = 0; i < E; ++i) {
+    uint64_t min_op_time = cache[set_index][min_op_time_idx].time_stamp;
+    uint64_t curr_op_time = cache[set_index][i].time_stamp;
+    min_op_time_idx = min_op_time > curr_op_time ? i : min_op_time_idx;
+    if (cache[set_index][i].valid_bit && cache[set_index][i].tag == tag) {
+      miss = false;
+      break;
+    }
+  }
+
+  ++params->time_stamp;
+
+  // Use LRU Replacement Policy
+  bool eviction = false;
+  if (miss) {
+    // printf("min_op_time_idx %llu\n", min_op_time_idx);
+    eviction = cache[set_index][min_op_time_idx].valid_bit;
+    cache[set_index][min_op_time_idx].valid_bit = 1;
+    cache[set_index][min_op_time_idx].tag = tag;
+    cache[set_index][min_op_time_idx].time_stamp = params->time_stamp;
+  } else {
+    cache[set_index][i].time_stamp = params->time_stamp; // update time stamp
+  }
+
+  if (miss) {
+    ++stats->misses;
+  } else {
+    ++stats->hits;
+  }
+
+  if (eviction) {
+    ++stats->evictions;
+  }
+
+  if (memory_op->op == 'M') {
+    ++stats->hits; // write hit
+  }
+
+  if (verbose) {
+    printf("%c %llx,%llu", memory_op->op, memory_op->address, memory_op->size);
+    if (miss) {
+      printf(" miss");
+    } else {
+      printf(" hit");
+    }
+    if (eviction) {
+      printf(" eviction");
+    }
+    if (memory_op->op == 'M') {
+      printf(" hit");
+    }
+    printf("\n");
+  }
 }
 
 void LRUCacheParamsToString(const LRUCacheParams* params) {
@@ -179,9 +251,7 @@ void LRUCacheParamsToString(const LRUCacheParams* params) {
 void MemoryOperationToString(const MemoryOperation* ops) {
   printf("%c %llx,%llu\n", ops->op, ops->address, ops->size);
 }
-// TODO:
-// arg parser
-// input file parser
+
 int main(int argc, char* argv[]) {
   Args args;
   if (!ArgParser(argc, argv, &args)) return -1;
@@ -216,9 +286,10 @@ int main(int argc, char* argv[]) {
   while ( (line_len = getline(&line, &line_cap, stdin)) != -1 ) {
     if (line[0] != ' ') continue;
     sscanf(line+1, "%c %llx,%llu", &memory_op.op, &memory_op.address, &memory_op.size);
-    MemoryOperationToString(&memory_op);
+    // MemoryOperationToString(&memory_op);
+    LRUCacheSimulate(&memory_op, cache, &cache_params, &stats, args.v);
   }
   DeallocateLRUCache(cache);
-  printSummary(0, 0, 0);
+  printSummary(stats.hits, stats.misses, stats.evictions);
   return 0;
 }
