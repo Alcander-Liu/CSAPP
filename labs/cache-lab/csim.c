@@ -15,8 +15,11 @@ typedef struct {
 typedef struct {
   uint32_t S;
   uint32_t E;
+  uint32_t s_bits;
+  uint32_t b_bits;
+  uint32_t t_bits;
   uint64_t time_stamp;
-} LRUCachePara;
+} LRUCacheParams;
 
 typedef struct {
   bool valid_bit;
@@ -123,7 +126,7 @@ bool ArgParser(int argc, char* argv[], Args* args) {
   return true;
 }
 
-LRUCache** InitLRUCache(LRUCachePara* params) {
+LRUCache** InitLRUCache(LRUCacheParams* params) {
   uint32_t S = params->S;
   uint32_t E = params->E;
   LRUCache** cache = NULL;
@@ -149,21 +152,27 @@ LRUCache** InitLRUCache(LRUCachePara* params) {
   return cache;
 }
 
-void DeallocateLRUCache(LRUCache** cache, LRUCachePara* params) {
-  uint32_t S = params->S;
+void DeallocateLRUCache(LRUCache** cache) {
   if (cache == NULL) return;
-  for (int i = 0; i < S; ++i) {
-    free(cache[i]);
-  }
+  free(cache[0]);
   free(cache);
 }
 
 void LRUCacheSimulate(const MemoryOperation* memory_op,
                       LRUCache** cache,
-                      LRUCachePara* paras,
+                      LRUCacheParams* paras,
                       Stats* stats,
                       bool verbose) {
   ;
+}
+
+void LRUCacheParamsToString(const LRUCacheParams* params) {
+  printf("Number of set bits: %u\n", params->s_bits);
+  printf("Number of block bits: %u\n", params->b_bits);
+  printf("Number of tag bits: %u\n", params->t_bits);
+  printf("Number of sets: S = %u\n", params->S);
+  printf("Number of Lines: E = %u\n", params->E);
+  printf("Init Time Stamp: %llu\n", params->time_stamp);
 }
 
 // TODO:
@@ -173,13 +182,21 @@ int main(int argc, char* argv[]) {
   Args args;
   if (!ArgParser(argc, argv, &args)) return -1;
   ArgsToString(&args);
+  if (args.s + args.b > 64) {
+    ToStderr("%s\n", "Error sum of set bits and block bits > 64");
+    return -1;
+  }
 
-  LRUCachePara cache_params;
-  cache_params.S = args.s << 1;
+  LRUCacheParams cache_params;
+  cache_params.s_bits = args.s;
+  cache_params.b_bits = args.b;
+  cache_params.t_bits = 64 - (args.s + args.b);
+  cache_params.S = 1 << args.s;
   cache_params.E = args.E;
   cache_params.time_stamp = 0;
+  LRUCacheParamsToString(&cache_params);
   LRUCache** cache = InitLRUCache(&cache_params);
-  DeallocateLRUCache(cache, &cache_params);
+  DeallocateLRUCache(cache);
   printSummary(0, 0, 0);
   return 0;
 }
