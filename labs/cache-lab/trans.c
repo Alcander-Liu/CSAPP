@@ -50,14 +50,12 @@ void transpose_submit(int M, int N, int A[N][M], int B[M][N])
 
     // Loop through the diangle of A
     for (i = 0; i < 32; i += 8) {
-        for (j = 0; j < 32; j += 8) {
-            for (n = 0; n < 8; ++n) {
-                for (m = 0; m < 8; ++m) {
-                    if (n == m) continue;
-                    B[j+m][i+n] = A[i+n][j+m];
-                }
-                B[j+n][i+n] = A[i+n][j+n];
+        for (n = 0; n < 8; ++n) {
+            for (m = 0; m < 8; ++m) {
+                if (n == m) continue;
+                B[i+m][i+n] = A[i+n][i+m];
             }
+            B[i+n][i+n] = A[i+n][i+n];
         }
     }
 }
