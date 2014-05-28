@@ -120,38 +120,37 @@ bool ArgParser(int argc, char* argv[], Args* args) {
     return false;
   }
 
-  // ArgsToString(&_args);
   return true;
 }
 
-LRUCache** InitLRUCache(uint32_t s, uint32_t E, LRUCachePara* paras) {
-  paras->S = 1 << s;
-  paras->E = E;
-  paras->time_stamp = 0;
+LRUCache** InitLRUCache(LRUCachePara* params) {
+  uint32_t S = params->S;
+  uint32_t E = params->E;
   LRUCache** cache = NULL;
 
-  cache = (LRUCache**)malloc(paras->S * sizeof(LRUCacheLine*));
+  cache = (LRUCache**)malloc(S * sizeof(LRUCacheLine*));
   if (cache == NULL) {
     ToStderr("Error in allocate memory size: %lu bytes\n",
-             paras->S * sizeof(LRUCacheLine));
+             S * sizeof(LRUCacheLine));
     return NULL;
   }
 
-  cache[0] = (LRUCache*)malloc(paras->S * paras->E * sizeof(LRUCacheLine));
+  cache[0] = (LRUCache*)malloc(S * E * sizeof(LRUCacheLine));
   if (cache[0] == NULL) {
     ToStderr("Error in allocate memory size: %lu bytes\n",
-             paras->S * paras->E * sizeof(LRUCacheLine));
+             S * E * sizeof(LRUCacheLine));
     return NULL;
   }
 
-  size_t stride = paras->E * sizeof(LRUCacheLine);
-  for (int i = 1; i < paras->S; ++i) {
+  size_t stride = E * sizeof(LRUCacheLine);
+  for (int i = 1; i < S; ++i) {
     cache[i] = cache[i-1] + stride;
   }
   return cache;
 }
 
-void ClearLRUCache(uint32_t S, uint32_t E, LRUCache** cache) {
+void DeallocateLRUCache(LRUCache** cache, LRUCachePara* params) {
+  uint32_t S = params->S;
   if (cache == NULL) return;
   for (int i = 0; i < S; ++i) {
     free(cache[i]);
@@ -159,11 +158,11 @@ void ClearLRUCache(uint32_t S, uint32_t E, LRUCache** cache) {
   free(cache);
 }
 
-void LRUCacheSim(const MemoryOperation* memory_op,
-                 LRUCache** cache,
-                 LRUCachePara* paras,
-                 Stats* stats,
-                 bool verbose) {
+void LRUCacheSimulate(const MemoryOperation* memory_op,
+                      LRUCache** cache,
+                      LRUCachePara* paras,
+                      Stats* stats,
+                      bool verbose) {
   ;
 }
 
@@ -173,6 +172,14 @@ void LRUCacheSim(const MemoryOperation* memory_op,
 int main(int argc, char* argv[]) {
   Args args;
   if (!ArgParser(argc, argv, &args)) return -1;
+  ArgsToString(&args);
+
+  LRUCachePara cache_params;
+  cache_params.S = args.s << 1;
+  cache_params.E = args.E;
+  cache_params.time_stamp = 0;
+  LRUCache** cache = InitLRUCache(&cache_params);
+  DeallocateLRUCache(cache, &cache_params);
   printSummary(0, 0, 0);
   return 0;
 }
