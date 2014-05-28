@@ -194,7 +194,14 @@ int main(int argc, char* argv[]) {
   cache_params.S = 1 << args.s;
   cache_params.E = args.E;
   cache_params.time_stamp = 0;
+
+  Stats stats;
+  stats.hits = 0;
+  stats.misses = 0;
+  stats.evictions = 0;
+
   LRUCacheParamsToString(&cache_params);
+
   LRUCache** cache = InitLRUCache(&cache_params);
   DeallocateLRUCache(cache);
   printSummary(0, 0, 0);
