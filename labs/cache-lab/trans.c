@@ -24,7 +24,6 @@ void transpose_submit(int M, int N, int A[N][M], int B[M][N])
 {
     int i, j;
     int n, m;
-    int p, q;
     // if (M != 32 && N != 32) return;
 
     if (M == 32 && N == 32) {
@@ -99,6 +98,46 @@ void transpose_submit(int M, int N, int A[N][M], int B[M][N])
             }
         }
 
+        // for (i = 0; i < 64; i += 8) {
+
+        //     for (n = 0; n < 4; ++n) {
+        //         for (m = 0; m < 4; ++m) {
+        //             if (n == m) continue;
+        //             B[i+m][i+n] = A[i+n][i+m];
+        //             B[i+m][i+n+4] = A[i+n][i+m+4];
+        //         }
+        //        B[i+n][i+n] = A[i+n][i+n];
+        //        B[i+n][i+n+4] = A[i+n][i+n+4];
+        //     }
+
+        //     for (n = 4; n < 8; ++n) {
+        //         for (m = 0; m < 4; ++m) {
+        //             if (n - 4 == m) continue;
+        //             B[i+m+4][i+n] = A[i+n][i+m+4];
+        //             B[i+m+4][i+n-4] = A[i+n][i+m];
+        //         }
+        //         B[i+n][i+n-4] = A[i+n][i+n-4];
+        //         B[i+n][i+n] = A[i+n][i+n];
+        //     }
+
+        //     int q, w, e, r;
+        //     for (n = 7; n > 3; --n) {
+        //         q = B[i+n][i+0];
+        //         w = B[i+n][i+1];
+        //         e = B[i+n][i+2];
+        //         r = B[i+n][i+3];
+
+        //         B[i+n][i+0] = B[i+n-4][i+4];
+        //         B[i+n][i+1] = B[i+n-4][i+5];
+        //         B[i+n][i+2] = B[i+n-4][i+6];
+        //         B[i+n][i+3] = B[i+n-4][i+7];
+
+        //         B[i+n-4][i+4] = q;
+        //         B[i+n-4][i+5] = w;
+        //         B[i+n-4][i+6] = e;
+        //         B[i+n-4][i+7] = r;
+        //     }
+        // }
         // Loop through diangle of A
         for (i = 0; i < 64; i += 8) {
 
