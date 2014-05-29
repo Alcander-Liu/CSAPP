@@ -99,27 +99,39 @@ void transpose_submit(int M, int N, int A[N][M], int B[M][N])
             }
         }
 
+        // Loop through diangle of A
         for (i = 0; i < 64; i += 8) {
-            for (p = i; p < i + 8; p += 4) {
 
-                q = i;
-                for (n = 0; n < 4; ++n) {
-                    for (m = 0; m < 4; ++m) {
-                        if (n == m) continue;
-                        B[q+m][p+n] = A[p+n][q+m];
-                    }
-                    B[q+n][p+n] = A[p+n][q+n];
+            for (n = 0; n < 4; ++n) {
+                for (m = 0; m < 4; ++m) {
+                    if (n == m) continue;
+                    B[i+m][i+n] = A[i+n][i+m];
                 }
+                B[i+n][i+n] = A[i+n][i+n];
+            }
 
-                q += 4;
-                for (n = 3; n >= 0; --n) {
-                    for (m = 3; m >= 0; --m) {
-                        if (n == m) continue;
-                        B[q+m][p+n] = A[p+n][q+m];
-                    }
-                    B[q+n][p+n] = A[p+n][q+n];
+            for (n = 4; n < 8; ++n) {
+                for (m = 0; m < 4; ++m) {
+                    if (n - 4 == m) continue;
+                    B[i+m][i+n] = A[i+n][i+m];
                 }
+                B[i+n-4][i+n] = A[i+n][i+n-4];
+            }
 
+            for (n = 7; n > 3; --n) {
+                for (m = 7; m > 3; --m) {
+                    if (n == m) continue;
+                    B[i+m][i+n] = A[i+n][i+m];
+                }
+                B[i+n][i+n] = A[i+n][i+n];
+            }
+
+            for (n = 3; n >= 0; --n) {
+                for (m = 7; m > 3; --m) {
+                    if (m - 4 == n) continue;
+                    B[i+m][i+n] = A[i+n][i+m];
+                }
+                B[i+n+4][i+n] = A[i+n][i+n+4];
             }
         }
     }
