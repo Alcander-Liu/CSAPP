@@ -22,40 +22,105 @@ int is_transpose(int M, int N, int A[N][M], int B[M][N]);
 char transpose_submit_desc[] = "Transpose submission";
 void transpose_submit(int M, int N, int A[N][M], int B[M][N])
 {
-    if (M != 32 && N != 32) return;
-
     int i, j;
     int n, m;
-    // Loop through upper triangle of A
-    for (i = 0; i < 24; i += 8) {
-        for (j = i + 8; j < 32; j += 8) {
+    int p, q;
+    // if (M != 32 && N != 32) return;
+
+    if (M == 32 && N == 32) {
+        // Loop through upper triangle of A
+        for (i = 0; i < N-8; i += 8) {
+            for (j = i + 8; j < M; j += 8) {
+                for (n = 0; n < 8; ++n) {
+                    for (m = 0; m < 8; ++m) {
+                        B[j+m][i+n] = A[i+n][j+m];
+                    }
+                }
+            }
+        }
+
+        // Loop through lower triangle of A
+        for (i = 8; i < N; i += 8) {
+            for (j = 0; j < i; j += 8) {
+                for (n = 0; n < 8; ++n) {
+                    for (m = 0; m < 8; ++m) {
+                        B[j+m][i+n] = A[i+n][j+m];
+                    }
+                }
+            }
+        }
+
+        // Loop through the diangle of A
+        for (i = 0; i < N; i += 8) {
             for (n = 0; n < 8; ++n) {
                 for (m = 0; m < 8; ++m) {
-                    B[j+m][i+n] = A[i+n][j+m];
+                    if (n == m) continue;
+                    B[i+m][i+n] = A[i+n][i+m];
                 }
+                B[i+n][i+n] = A[i+n][i+n];
             }
         }
     }
 
-    // Loop through lower triangle of A
-    for (i = 8; i < 32; i += 8) {
-        for (j = 0; j < i; j += 8) {
-            for (n = 0; n < 8; ++n) {
-                for (m = 0; m < 8; ++m) {
-                    B[j+m][i+n] = A[i+n][j+m];
+    if (M == 64 && N == 64) {
+        // Loop through upper triangle of A
+        for (i = 0; i < 64 - 8; i += 8) {
+            for (j = i + 8; j < 64; j += 8) {
+                // left side
+                for (n = 0; n < 8; ++n) {
+                    for (m = 0; m < 4; ++m) {
+                        B[j+m][i+n] = A[i+n][j+m];
+                    }
+                }
+                // right side
+                for (n = 7; n >= 0; --n) {
+                    for (m = 4; m < 8; ++m) {
+                        B[j+m][i+n] = A[i+n][j+m];
+                    }
                 }
             }
         }
-    }
 
-    // Loop through the diangle of A
-    for (i = 0; i < 32; i += 8) {
-        for (n = 0; n < 8; ++n) {
-            for (m = 0; m < 8; ++m) {
-                if (n == m) continue;
-                B[i+m][i+n] = A[i+n][i+m];
+        // Loop through lower triangle of A
+        for (i = 8; i < 64; i += 8) {
+            for (j = 0; j < i; j += 8) {
+
+                for (n = 0; n < 8; ++n) {
+                    for (m = 0; m < 4; ++m) {
+                        B[j+m][i+n] = A[i+n][j+m];
+                    }
+                }
+
+                for (n = 7; n >= 0; --n) {
+                    for (m = 4; m < 8; ++m) {
+                        B[j+m][i+n] = A[i+n][j+m];
+                    }
+                }
             }
-            B[i+n][i+n] = A[i+n][i+n];
+        }
+
+        for (i = 0; i < 64; i += 8) {
+            for (p = i; p < i + 8; p += 4) {
+
+                q = i;
+                for (n = 0; n < 4; ++n) {
+                    for (m = 0; m < 4; ++m) {
+                        if (n == m) continue;
+                        B[q+m][p+n] = A[p+n][q+m];
+                    }
+                    B[q+n][p+n] = A[p+n][q+n];
+                }
+
+                q += 4;
+                for (n = 3; n >= 0; --n) {
+                    for (m = 3; m >= 0; --m) {
+                        if (n == m) continue;
+                        B[q+m][p+n] = A[p+n][q+m];
+                    }
+                    B[q+n][p+n] = A[p+n][q+n];
+                }
+
+            }
         }
     }
 }
