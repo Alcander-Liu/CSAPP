@@ -16,3 +16,6 @@ Computer Systems A Programmer's Perspective (深入理解计算机系统)
        * Solved All levels
     4. cache-lab (version: May 06, 2014)
        * Part A : cache simulator, Evalute: 27/27 points
+       * Part B
+         * M = 32, N = 32, Misses : 287    (300 ~ 600)
+         * M = 64, N = 64, Misses : 1427   (1300 ~ 2000)
