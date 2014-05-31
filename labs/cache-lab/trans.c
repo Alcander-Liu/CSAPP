@@ -12,6 +12,276 @@
 
 int is_transpose(int M, int N, int A[N][M], int B[M][N]);
 
+
+void transpose_matrix_64_64(int N, int M, int A[N][M], int B[M][N]) {
+    int i, j, n, m;
+    // use 8 registers as temp
+    int r0, r1, r2, r3, r4, r5, r6, r7;
+    // Transpose 8x8 diagonal block, numbered 0 ~ 6, from upper left
+    // to lower right, the last one will not tranpose now
+    // for each diagonal block in [i ~ i+8][i ~ i+8], we borrow the
+    // [0 ~ 3][56 ~ 63] (in other words, the last block) as a cache
+    for (i = 0; i < 56; i += 8) {
+        // copy A upper 4 lines into corresponding B position,
+        // no transpose
+        // total 12 misses in the first time
+        // then decrease to 8 misses
+        for (n = 0; n < 4; ++n) {
+            // read a line, total 4 misses inside this loop
+            r0 = A[i + n][i + 0];
+            r1 = A[i + n][i + 1];
+            r2 = A[i + n][i + 2];
+            r3 = A[i + n][i + 3];
+            r4 = A[i + n][i + 4];
+            r5 = A[i + n][i + 5];
+            r6 = A[i + n][i + 6];
+            r7 = A[i + n][i + 7];
+
+            // store in d, totoal 4 misses inside this loop
+            B[i + n][i + 0] = r0;
+            B[i + n][i + 1] = r1;
+            B[i + n][i + 2] = r2;
+            B[i + n][i + 3] = r3;
+            B[i + n][i + 4] = r4;
+            B[i + n][i + 5] = r5;
+            B[i + n][i + 6] = r6;
+            B[i + n][i + 7] = r7;
+
+            // saved to the borrowed cache, total 4 misses in the first time
+            B[n][56] = r4;
+            B[n][57] = r5;
+            B[n][58] = r6;
+            B[n][59] = r7;
+        }
+
+        // in-place transpose the upper left, 0 misses,
+        // since all element fit into the cache
+        for (n = 0; n < 4; ++n) {
+            for (m = n; m < 4; ++m) {
+                r1 = B[i + n][i + m];
+                B[i + n][i + m] = B[i + m][i + n];
+                B[i + m][i + n] = r1;
+            }
+        }
+
+        // copy lower 4 lines
+        // total 8 misses
+        for (n = 4; n < 8; ++n) {
+
+            r0 = A[i + n][i + 0];
+            r1 = A[i + n][i + 1];
+            r2 = A[i + n][i + 2];
+            r3 = A[i + n][i + 3];
+            r4 = A[i + n][i + 4];
+            r5 = A[i + n][i + 5];
+            r6 = A[i + n][i + 6];
+            r7 = A[i + n][i + 7];
+
+            // store in d, totoal 4 misses inside this loop
+            B[i + n][i + 0] = r0;
+            B[i + n][i + 1] = r1;
+            B[i + n][i + 2] = r2;
+            B[i + n][i + 3] = r3;
+            B[i + n][i + 4] = r4;
+            B[i + n][i + 5] = r5;
+            B[i + n][i + 6] = r6;
+            B[i + n][i + 7] = r7;
+
+            // saved to the borrowed cache, total 0 misses
+            B[n - 4][60] = r0;
+            B[n - 4][61] = r1;
+            B[n - 4][62] = r2;
+            B[n - 4][63] = r3;
+        }
+
+        // in-place transpose lower right
+        // total 0 miss
+        for (n = 4; n < 8; ++n) {
+            for (m = n; m < 8; ++m) {
+                r1 = B[i + n][i + m];
+                B[i + n][i + m] = B[i + m][i + n];
+                B[i + m][i + n] = r1;
+            }
+        }
+
+        // in-place transpose two matrixex in the cache
+        // total 0 misses
+        for (n = 0; n < 4; ++n) {
+            for (m = n; m < 4; ++m) {
+                r1 = B[n][m + 56];
+                B[n][m + 56] = B[m][n + 56];
+                B[m][n + 56] = r1;
+
+                r1 = B[n][m + 60];
+                B[n][m + 60] = B[m][n + 60];
+                B[m][n + 60] = r1;
+            }
+        }
+
+        // copy the transposed matrix from
+        // [0 ~ 3][56 ~ 63] into lower left of B
+        // total 0 miss
+        for (n = 0; n < 4; ++n) {
+            for (m = 0; m < 4; ++m) {
+                B[i + n + 4][i + m] = B[n][56 + m];
+            }
+        }
+
+        // copy the transposed matrix from
+        // [0 ~ 3][60 ~ 63] into upper right of B
+        // total 4 misses
+        for (n = 0; n < 4; ++n) {
+            for (m = 0; m < 4; ++m) {
+                B[i + n][i + m + 4] = B[n][60 + m];
+            }
+        }
+    }
+
+    // transpose the last diagonal block
+    // total 24 misses
+    {
+        // copy upper 4 lines
+        // total 8 misses
+        for (n = 0; n < 4; ++n) {
+            r0 = A[56 + n][56 + 0];
+            r1 = A[56 + n][56 + 1];
+            r2 = A[56 + n][56 + 2];
+            r3 = A[56 + n][56 + 3];
+            r4 = A[56 + n][56 + 4];
+            r5 = A[56 + n][56 + 5];
+            r6 = A[56 + n][56 + 6];
+            r7 = A[56 + n][56 + 7];
+
+            B[56 + n][56 + 0] = r0;
+            B[56 + n][56 + 1] = r1;
+            B[56 + n][56 + 2] = r2;
+            B[56 + n][56 + 3] = r3;
+            B[56 + n][56 + 4] = r4;
+            B[56 + n][56 + 5] = r5;
+            B[56 + n][56 + 6] = r6;
+            B[56 + n][56 + 7] = r7;
+        }
+
+        // in-place transpose of upper left and upper right
+        // total 0 misses
+        for (n = 0; n < 4; ++n) {
+            for (m = n; m < 4; ++m) {
+                r1 = B[n + 56][m + 56];
+                B[n + 56][m + 56] = B[m + 56][n + 56];
+                B[m + 56][n + 56] = r1;
+
+                r1 = B[n + 56][m + 60];
+                B[n + 56][m + 60] = B[m + 56][n + 60];
+                B[m + 56][n + 60] = r1;
+            }
+        }
+
+        // copy lower 4 lines
+        // total 8 misses
+        for (n = 4; n < 8; ++n) {
+            r0 = A[56 + n][56 + 0];
+            r1 = A[56 + n][56 + 1];
+            r2 = A[56 + n][56 + 2];
+            r3 = A[56 + n][56 + 3];
+            r4 = A[56 + n][56 + 4];
+            r5 = A[56 + n][56 + 5];
+            r6 = A[56 + n][56 + 6];
+            r7 = A[56 + n][56 + 7];
+
+            B[56 + n][56 + 0] = r0;
+            B[56 + n][56 + 1] = r1;
+            B[56 + n][56 + 2] = r2;
+            B[56 + n][56 + 3] = r3;
+            B[56 + n][56 + 4] = r4;
+            B[56 + n][56 + 5] = r5;
+            B[56 + n][56 + 6] = r6;
+            B[56 + n][56 + 7] = r7;
+        }
+
+        // in-place transpose of lower left and lower right
+        // total 0 miss
+        for (n = 0; n < 4; ++n) {
+            for (m = n; m < 4; ++m) {
+                r1 = B[n + 60][m + 60];
+                B[n + 60][m + 60] = B[m + 60][n + 60];
+                B[m + 60][n + 60] = r1;
+
+                r1 = B[n + 60][m + 56];
+                B[n + 60][m + 56] = B[m + 60][n + 56];
+                B[m + 60][n + 56] = r1;
+            }
+        }
+
+        // exchange upper right and lower left
+        // total 12 misses
+        for (n = 0; n < 4; ++n) {
+            // 1 miss
+            r0 = B[56 + n][60 + 0];
+            r1 = B[56 + n][60 + 1];
+            r2 = B[56 + n][60 + 2];
+            r3 = B[56 + n][60 + 3];
+
+            // 1 miss
+            r4 = B[60 + n][56 + 0];
+            r5 = B[60 + n][56 + 1];
+            r6 = B[60 + n][56 + 2];
+            r7 = B[60 + n][56 + 3];
+
+            // 0 miss
+            B[60 + n][56 + 0] = r0;
+            B[60 + n][56 + 1] = r1;
+            B[60 + n][56 + 2] = r2;
+            B[60 + n][56 + 3] = r3;
+
+            // 1 miss
+            B[56 + n][60 + 0] = r4;
+            B[56 + n][60 + 1] = r5;
+            B[56 + n][60 + 2] = r6;
+            B[56 + n][60 + 3] = r7;
+        }
+    }
+
+    // transpose the upper triangle block of A into
+    // lower triangle of B
+    // total misses = 28 blocks x 20 misses per block
+    for (i = 0; i < 64 - 8; i += 8) {
+        for (j = i + 8; j < 64; j += 8) {
+            // left side
+            for (n = 0; n < 8; ++n) {
+                for (m = 0; m < 4; ++m) {
+                    B[j+m][i+n] = A[i+n][j+m];
+                }
+            }
+            // right side
+            for (n = 7; n >= 0; --n) {
+                for (m = 4; m < 8; ++m) {
+                    B[j+m][i+n] = A[i+n][j+m];
+                }
+            }
+        }
+    }
+
+    // transpose the lower triangle block of A into
+    // upper triangle of B
+    // totoal misses = 28 blocks x 20 misses per block
+    for (i = 8; i < 64; i += 8) {
+        for (j = 0; j < i; j += 8) {
+
+            for (n = 0; n < 8; ++n) {
+                for (m = 0; m < 4; ++m) {
+                    B[j+m][i+n] = A[i+n][j+m];
+                }
+            }
+
+            for (n = 7; n >= 0; --n) {
+                for (m = 4; m < 8; ++m) {
+                    B[j+m][i+n] = A[i+n][j+m];
+                }
+            }
+        }
+    }
+}
+
 /*
  * transpose_submit - This is the solution transpose function that you
  *     will be graded on for Part B of the assignment. Do not change
@@ -61,203 +331,7 @@ void transpose_submit(int M, int N, int A[N][M], int B[M][N])
         }
     }
     if (M == 64 && N == 64) {
-
-        // Transpose 8x8 diagonal block, numbered 0 ~ 6, from upper left
-        // to lower right, the last one will not tranpose now
-        // for each diagonal block in [i ~ i+8][i ~ i+8], we borrow the
-        // [0 ~ 3][56 ~ 63] (in other words, the last block) as a cache
-        // use 8 registers as temp
-        int r0, r1, r2, r3, r4, r5, r6, r7;
-        for (i = 0; i < 56; i += 8) {
-            // copy A upper 4 lines into corresponding B position,
-            // no transpose
-            // total 12 misses in the first time
-            // then decrease to 8 misses
-            for (n = 0; n < 4; ++n) {
-                // read a line, total 4 misses inside this loop
-                r0 = A[i + n][i + 0];
-                r1 = A[i + n][i + 1];
-                r2 = A[i + n][i + 2];
-                r3 = A[i + n][i + 3];
-                r4 = A[i + n][i + 4];
-                r5 = A[i + n][i + 5];
-                r6 = A[i + n][i + 6];
-                r7 = A[i + n][i + 7];
-
-                // store in d, totoal 4 misses inside this loop
-                B[i + n][i + 0] = r0;
-                B[i + n][i + 1] = r1;
-                B[i + n][i + 2] = r2;
-                B[i + n][i + 3] = r3;
-                B[i + n][i + 4] = r4;
-                B[i + n][i + 5] = r5;
-                B[i + n][i + 6] = r6;
-                B[i + n][i + 7] = r7;
-
-                // saved to the borrowed cache, total 4 misses in the first time
-                B[n][56] = r4;
-                B[n][57] = r5;
-                B[n][58] = r6;
-                B[n][59] = r7;
-            }
-
-            // in-place transpose the upper left, 0 misses,
-            // since all element fit into the cache
-            for (n = 0; n < 4; ++n) {
-                for (m = n; m < 4; ++m) {
-                    // swap
-                    B[i + n][i + m] ^= B[i + m][i + n];
-                    B[i + m][i + n] ^= B[i + n][i + m];
-                    B[i + n][i + m] ^= B[i + m][i + n];
-                }
-            }
-
-            // copy lower 4 lines
-            // total 8 misses
-            for (n = 4; n < 8; ++n) {
-
-                r0 = A[i + n][i + 0];
-                r1 = A[i + n][i + 1];
-                r2 = A[i + n][i + 2];
-                r3 = A[i + n][i + 3];
-                r4 = A[i + n][i + 4];
-                r5 = A[i + n][i + 5];
-                r6 = A[i + n][i + 6];
-                r7 = A[i + n][i + 7];
-
-                // store in d, totoal 4 misses inside this loop
-                B[i + n][i + 0] = r0;
-                B[i + n][i + 1] = r1;
-                B[i + n][i + 2] = r2;
-                B[i + n][i + 3] = r3;
-                B[i + n][i + 4] = r4;
-                B[i + n][i + 5] = r5;
-                B[i + n][i + 6] = r6;
-                B[i + n][i + 7] = r7;
-
-                // saved to the borrowed cache, total 0 misses
-                B[n - 4][60] = r0;
-                B[n - 4][61] = r1;
-                B[n - 4][62] = r2;
-                B[n - 4][63] = r3;
-            }
-
-            // in-place transpose lower right
-            // total 0 miss
-            for (n = 4; n < 8; ++n) {
-                for (m = n; m < 8; ++m) {
-                    B[i + n][i + m] ^= B[i + m][i + n];
-                    B[i + m][i + n] ^= B[i + n][i + m];
-                    B[i + n][i + m] ^= B[i + m][i + n];
-                }
-            }
-
-            // in-place transpose two matrixex in the cache
-            // total 0 misses
-            for (n = 0; n < 4; ++n) {
-                for (m = n; m < 4; ++m) {
-                    B[n][m + 56] ^= B[m][n + 56];
-                    B[m][n + 56] ^= B[n][m + 56];
-                    B[n][m + 56] ^= B[m][n + 56];
-
-                    B[n][m + 60] ^= B[m][n + 60];
-                    B[m][n + 60] ^= B[n][m + 60];
-                    B[n][m + 60] ^= B[m][n + 60];
-                }
-            }
-
-            // copy the transposed matrix from
-            // [0 ~ 3][56 ~ 63] into lower left of B
-            // total 0 miss
-            for (n = 0; n < 4; ++n) {
-                for (m = 0; m < 4; ++m) {
-                    B[i + n + 4][i + m] = B[n][56 + m];
-                }
-            }
-
-            // copy the transposed matrix from
-            // [0 ~ 3][60 ~ 63] into upper right of B
-            // total 4 misses
-            for (n = 0; n < 4; ++n) {
-                for (m = 0; m < 4; ++m) {
-                    B[i + n][i + m + 4] = B[n][60 + m];
-                }
-            }
-        }
-        return;
-
-        // Loop through upper triangle of A
-        for (i = 0; i < 64 - 8; i += 8) {
-            for (j = i + 8; j < 64; j += 8) {
-                // left side
-                for (n = 0; n < 8; ++n) {
-                    for (m = 0; m < 4; ++m) {
-                        B[j+m][i+n] = A[i+n][j+m];
-                    }
-                }
-                // right side
-                for (n = 7; n >= 0; --n) {
-                    for (m = 4; m < 8; ++m) {
-                        B[j+m][i+n] = A[i+n][j+m];
-                    }
-                }
-            }
-        }
-        // Loop through lower triangle of A
-        for (i = 8; i < 64; i += 8) {
-            for (j = 0; j < i; j += 8) {
-
-                for (n = 0; n < 8; ++n) {
-                    for (m = 0; m < 4; ++m) {
-                        B[j+m][i+n] = A[i+n][j+m];
-                    }
-                }
-
-                for (n = 7; n >= 0; --n) {
-                    for (m = 4; m < 8; ++m) {
-                        B[j+m][i+n] = A[i+n][j+m];
-                    }
-                }
-            }
-        }
-
-        // Loop through diangle of A
-        /*
-        for (i = 0; i < 64; i += 8) {
-
-            for (n = 0; n < 4; ++n) {
-                for (m = 0; m < 4; ++m) {
-                    if (n == m) continue;
-                    B[i+m][i+n] = A[i+n][i+m];
-                }
-                B[i+n][i+n] = A[i+n][i+n];
-            }
-
-            for (n = 4; n < 8; ++n) {
-                for (m = 0; m < 4; ++m) {
-                    if (n - 4 == m) continue;
-                    B[i+m][i+n] = A[i+n][i+m];
-                }
-                B[i+n-4][i+n] = A[i+n][i+n-4];
-            }
-
-            for (n = 7; n > 3; --n) {
-                for (m = 7; m > 3; --m) {
-                    if (n == m) continue;
-                    B[i+m][i+n] = A[i+n][i+m];
-                }
-                B[i+n][i+n] = A[i+n][i+n];
-            }
-
-            for (n = 3; n >= 0; --n) {
-                for (m = 7; m > 3; --m) {
-                    if (m - 4 == n) continue;
-                    B[i+m][i+n] = A[i+n][i+m];
-                }
-                B[i+n+4][i+n] = A[i+n][i+n+4];
-            }
-        }
-        */
+        transpose_matrix_64_64(M, N, A, B);
     }
 }
 
