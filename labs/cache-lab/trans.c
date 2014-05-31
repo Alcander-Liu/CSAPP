@@ -12,6 +12,93 @@
 
 int is_transpose(int M, int N, int A[N][M], int B[M][N]);
 
+void transpose_matrix_32_32(int N, int M, int A[N][M], int B[M][N]) {
+    int i, j, n, m;
+    int r0, r1, r2, r3, r4, r5, r6, r7;
+    // Transpose upper triangle of A into lower triangle of B
+    // total misses = 6 blocks x 16 per blocks
+    for (i = 0; i < N-8; i += 8) {
+        for (j = i + 8; j < M; j += 8) {
+            for (n = 0; n < 8; ++n) {
+                for (m = 0; m < 8; ++m) {
+                    B[j+m][i+n] = A[i+n][j+m];
+                }
+            }
+        }
+    }
+
+    // Transpose lower triangle of A into upper triangle of B
+    // total misses = 6 blocks x 16 per blocks
+    for (i = 8; i < N; i += 8) {
+        for (j = 0; j < i; j += 8) {
+            for (n = 0; n < 8; ++n) {
+                for (m = 0; m < 8; ++m) {
+                    B[j+m][i+n] = A[i+n][j+m];
+                }
+            }
+        }
+    }
+
+    // Transpose diagonal
+    // total misses = 4 x 16
+    for (i = 0; i < N; i += 8) {
+        // total 16 miss
+        for (n = 0; n < 8; ++n) {
+            // 1 miss
+            r0 = A[i + n][i + 0];
+            r1 = A[i + n][i + 1];
+            r2 = A[i + n][i + 2];
+            r3 = A[i + n][i + 3];
+            r4 = A[i + n][i + 4];
+            r5 = A[i + n][i + 5];
+            r6 = A[i + n][i + 6];
+            r7 = A[i + n][i + 7];
+
+            // 1 miss
+            B[i + n][i + 0] = r0;
+            B[i + n][i + 1] = r1;
+            B[i + n][i + 2] = r2;
+            B[i + n][i + 3] = r3;
+            B[i + n][i + 4] = r4;
+            B[i + n][i + 5] = r5;
+            B[i + n][i + 6] = r6;
+            B[i + n][i + 7] = r7;
+        }
+
+        // in-place transpose of upper left and lower right,
+        // upper right and lower left
+        // total 0 misses
+        for (n = 0; n < 4; ++n) {
+            for (m = n; m < 4; ++m) {
+                r1 = B[i + n][i + m];
+                B[i + n][i + m] = B[i + m][i + n];
+                B[i + m][i + n] = r1;
+
+                r1 = B[i + n + 4][i + m + 4];
+                B[i + n + 4][i + m + 4] = B[i + m + 4][i + n + 4];
+                B[i + m + 4][i + n + 4] = r1;
+
+                r1 = B[i + n][i + m + 4];
+                B[i + n][i + m + 4] = B[i + m][i + n + 4];
+                B[i + m][i + n + 4] = r1;
+
+                r1 = B[i + n + 4][i + m];
+                B[i + n + 4][i + m] = B[i + m + 4][i + n];
+                B[i + m + 4][i + n] = r1;
+            }
+        }
+
+        // exchange
+        // total misses = 0
+        for (n = 0; n < 4; ++n) {
+            for (m = 0; m < 4; ++m) {
+                r1 = B[i + n][i + m + 4];
+                B[i + n][i + m + 4] = B[i + n + 4][i + m];
+                B[i + n + 4][i + m] = r1;
+            }
+        }
+    }
+}
 
 void transpose_matrix_64_64(int N, int M, int A[N][M], int B[M][N]) {
     int i, j, n, m;
@@ -292,43 +379,8 @@ void transpose_matrix_64_64(int N, int M, int A[N][M], int B[M][N]) {
 char transpose_submit_desc[] = "Transpose submission";
 void transpose_submit(int M, int N, int A[N][M], int B[M][N])
 {
-    int i, j;
-    int n, m;
-    // if (M != 32 && N != 32) return;
-
     if (M == 32 && N == 32) {
-        // Loop through upper triangle of A
-        for (i = 0; i < N-8; i += 8) {
-            for (j = i + 8; j < M; j += 8) {
-                for (n = 0; n < 8; ++n) {
-                    for (m = 0; m < 8; ++m) {
-                        B[j+m][i+n] = A[i+n][j+m];
-                    }
-                }
-            }
-        }
-
-        // Loop through lower triangle of A
-        for (i = 8; i < N; i += 8) {
-            for (j = 0; j < i; j += 8) {
-                for (n = 0; n < 8; ++n) {
-                    for (m = 0; m < 8; ++m) {
-                        B[j+m][i+n] = A[i+n][j+m];
-                    }
-                }
-            }
-        }
-
-        // Loop through the diangle of A
-        for (i = 0; i < N; i += 8) {
-            for (n = 0; n < 8; ++n) {
-                for (m = 0; m < 8; ++m) {
-                    if (n == m) continue;
-                    B[i+m][i+n] = A[i+n][i+m];
-                }
-                B[i+n][i+n] = A[i+n][i+n];
-            }
-        }
+        transpose_matrix_32_32(M, N, A, B);
     }
     if (M == 64 && N == 64) {
         transpose_matrix_64_64(M, N, A, B);
