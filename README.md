@@ -21,3 +21,4 @@ Computer Systems A Programmer's Perspective (深入理解计算机系统)
            * Miss < 300, get 8 points, > 600 0 points
          * M = 64, N = 64, Misses : 1295
            * Miss < 1300, get 8 points, > 2000 0 points
+    5. sh-lab (version: July 28, 200)
