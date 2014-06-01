@@ -13,7 +13,7 @@
 #include <sys/wait.h>
 #include <errno.h>
 
-#define LOG_DEBUG_STR
+// #define LOG_DEBUG_STR
 
 #ifdef LOG_DEBUG_STR
   #define DebugStr(args...) fprintf(stderr, args);
@@ -346,8 +346,7 @@ void sigchld_handler(int sig)
       printf("child %d terminated abnormally\n", pid);
     }
 
-    int stop = WIFSTOPPED(pid); // stoped or terminated
-    DebugStr("pid = %d, stop = %d\n", pid, stop);
+    int stop = WIFSTOPPED(status); // stoped or terminated
     struct job_t* job = getjobpid(jobs, pid);
 
     // if the child process is the job process
