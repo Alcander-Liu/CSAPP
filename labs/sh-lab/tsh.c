@@ -13,7 +13,13 @@
 #include <sys/wait.h>
 #include <errno.h>
 
-#define DebugStr(format, ...) fprintf(stderr, format, __VA_ARGS__);
+#define LOG_DEBUG_STR
+
+#ifdef LOG_DEBUG_STR
+  #define DebugStr(args...) fprintf(stderr, args);
+#else
+  #define DebugStr(args...)
+#endif
 
 /* Misc manifest constants */
 #define MAXLINE    1024   /* max line size */
@@ -360,7 +366,16 @@ void sigchld_handler(int sig)
  */
 void sigint_handler(int sig)
 {
-  return;
+  DebugStr("shell received ING signal\n");
+  pid_t pid = fgpid(jobs);
+  if (!pid) {
+    DebugStr("No foreground job\n");
+    return; // no foreground job
+  }
+
+  // since the pid of the job process is same as the group id
+  DebugStr("dispatch SIGINT to process group %d\n", pid);
+  Kill(-pid, SIGINT);
 }
 
 /*
@@ -458,12 +473,11 @@ int deletejob(struct job_t *jobs, pid_t pid)
 
 /* fgpid - Return PID of current foreground job, 0 if no such job */
 pid_t fgpid(struct job_t *jobs) {
-    int i;
-
-    for (i = 0; i < MAXJOBS; i++)
-  if (jobs[i].state == FG)
-      return jobs[i].pid;
-    return 0;
+  int i;
+  for (i = 0; i < MAXJOBS; i++) {
+    if (jobs[i].state == FG) return jobs[i].pid;
+  }
+  return 0;
 }
 
 /* getjobpid  - Find a job (by PID) on the job list */
