@@ -336,6 +336,7 @@ void sigchld_handler(int sig)
   while ( (pid = waitpid(-1, &status, WNOHANG | WUNTRACED)) > 0) {
     // if fg stopped or terminated
     if (pid == fgpid(jobs)) {
+      DebugStr("foreground job stopped or finish\n");
       fg_job_stopped_or_finished = 1;
     }
 
@@ -346,6 +347,7 @@ void sigchld_handler(int sig)
     }
 
     int stop = WIFSTOPPED(pid); // stoped or terminated
+    DebugStr("pid = %d, stop = %d\n", pid, stop);
     struct job_t* job = getjobpid(jobs, pid);
 
     // if the child process is the job process
@@ -354,6 +356,8 @@ void sigchld_handler(int sig)
       if (!stop) { // if the job process terminated, delte it
         deletejob(jobs, pid);
         DebugStr("pid = %d, jid = %d is deleted\n", pid, pid2jid(pid));
+      } else {
+        DebugStr("pid = %d, jid = %d is stopped\n", pid, pid2jid(pid));
       }
     }
   }
@@ -364,9 +368,8 @@ void sigchld_handler(int sig)
  *    user types ctrl-c at the keyboard.  Catch it and send it along
  *    to the foreground job.
  */
-void sigint_handler(int sig)
-{
-  DebugStr("shell received ING signal\n");
+void sigint_handler(int sig) {
+  DebugStr("shell received SIGINT signal\n");
   pid_t pid = fgpid(jobs);
   if (!pid) {
     DebugStr("No foreground job\n");
@@ -383,9 +386,18 @@ void sigint_handler(int sig)
  *     the user types ctrl-z at the keyboard. Catch it and suspend the
  *     foreground job by sending it a SIGTSTP.
  */
-void sigtstp_handler(int sig)
-{
+void sigtstp_handler(int sig) {
+  DebugStr("shell received SIGTSTP signal\n");
+  pid_t pid = fgpid(jobs);
+  if (!pid) {
+    DebugStr("No foreground job\n");
     return;
+  }
+
+  // since the pid of the job process is same as the group id
+  DebugStr("dispatch SIGTSTP to process group %d\n", pid);
+  Kill(-pid, SIGTSTP);
+  return;
 }
 
 /*********************
