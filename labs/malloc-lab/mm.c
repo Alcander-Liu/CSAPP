@@ -59,10 +59,14 @@ team_t team = {
 // #endif
 
 /* single word (4) or double word (8) alignment */
-#define ALIGNMENT 8
+#define ALIGNMENT      8
+#define MIN_BK_SIZE    8
 
 /* rounds up to the nearest multiple of ALIGNMENT */
 #define ALIGN(size) (((size) + (ALIGNMENT-1)) & ~0x7)
+#define IS_ALIGN(size)      (!(size & (ALIGNMENT - 1)))
+
+#define IS_ALIGN_WITH_MIN_BK_SIZE(size)        (!(size & (MIN_BK_SIZE-1)))
 
 // if complie with -m32, sizeof(size_t) = 4
 // if complie with -m64, sizeof(size_t) = 8
@@ -93,8 +97,10 @@ static void* heap_listp = NULL;
 // Function Declaration
 static void *extend_heap(size_t size);
 static void *coalesce(void *bp);
-static void *find_first_fit(size_t size);
-static void place_and_split(void *bp, size_t size);
+// the input size should be aligned
+static void *find_first_fit(size_t asize);
+// the input size should be aligned
+static void place_and_split(void *bp, size_t asize);
 
 /*
  * mm_init - initialize the malloc package.
@@ -218,18 +224,28 @@ static void *coalesce(void *bp) {
 }
 
 // linear search
-static void *find_first_fit(size_t size) {
+static void *find_first_fit(size_t asize) {
   void *hdrp = heap_listp;
-  size_t bp_size;
+  size_t b_size;
   do {
-    bp_size = GET_SIZE(hdrp);
-    if (size <= bp_size) {
+    b_size = GET_SIZE(hdrp);
+    if (asize <= b_size) {
       return hdrp + WSIZE;
     }
-    hdrp += bp_size;
-  } while (bp_size > 0);
+    hdrp += b_size;
+  } while (b_size > 0);
   return NULL;
 }
 
-static void place_and_split(void *bp, size_t size) {
+static void place_and_split(void *bp, size_t asize) {
+  size_t b_size = GET_SIZE(HDRP(bp));
+  size_t left_size = b_size - asize;
+  if (left_size && IS_ALIGN_WITH_MIN_BK_SIZE(left_size)) { // reminder > 0 and is multiple of minimum blockasize
+    void *new_bk_hdrp = bp + asize;
+    WRITE_WORD(new_bk_hdrp, PACK(left_size, 0));
+    WRITE_WORD(new_bk_hdrp + left_size - WSIZE, PACK(left_size, 0));
+    b_size = asize;
+  }
+  WRITE_WORD(HDRP(bp), PACK(b_size, 1));
+  WRITE_WORD(FTRP(bp), PACK(b_size, 1));
 }
