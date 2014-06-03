@@ -38,11 +38,11 @@ team_t team = {
     ""
 };
 
-#ifdef __x86_64__
-#warning "64"
-#else
-#warning "32"
-#endif
+// #ifdef __x86_64__
+// #warning "64"
+// #else
+// #warning "32"
+// #endif
 
 /* single word (4) or double word (8) alignment */
 #define ALIGNMENT 8
@@ -152,5 +152,36 @@ static void *extend_heap(size_t size) {
 }
 
 static void *coalesce(void *bp) {
+  size_t prev_alloc = GET_ALLOC(FTRP(PREV_BLKP(bp)));
+  size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(bp)));
+  size_t size = GET_SIZE(HDRP(bp));
+
+  // previous and next are both allocated
+  if (prev_alloc && next_alloc) {
     return NULL;
+  }
+
+  // previous is free but next is allocated
+  void *prev_bp = PREV_BLKP(bp);
+  if (!prev_alloc && next_alloc) {
+    size += GET_SIZE(HDRP(prev_bp));
+    WRITE_WORD(HDRP(prev_bp), PACK(size, 0));
+    WRITE_WORD(FTRP(bp), PACK(size, 0));
+    return prev_bp;
+  }
+
+  // next is free but previous is allocated
+  void *next_bp = NEXT_BLKP(bp);
+  if (prev_alloc && !next_alloc) {
+    size += GET_SIZE(HDRP(next_bp));
+    WRITE_WORD(HDRP(bp), PACK(size, 0));
+    WRITE_WORD(FTRP(next_bp), PACK(size, 0));
+    return bp;
+  }
+
+  // previous and next are both free
+  size += GET_SIZE(HDRP(prev_bp)) + GET_SIZE(HDRP(next_bp));
+  WRITE_WORD(HDRP(prev_bp), PACK(size, 0));
+  WRITE_WORD(FTRP(next_bp), PACK(size, 0));
+  return prev_bp;
 }
