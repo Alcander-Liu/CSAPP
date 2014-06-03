@@ -1,7 +1,18 @@
 // This version is same as that one described in the CSAPP
 // Implementation Details
-// 1. use implict free list
-// 2. use immediate coalescing with boundary tags
+// 0. Possible Maximum allocate size: 32GB
+// 1. Free Block Organization: use implict free list
+// 2. Coalescing: use immediate coalescing with boundary tags
+// 3. Placement: first-fit
+// 4. Splitting: Splitting only if the size of the reminder would equal or
+// exceed the minimum block size
+// 5. Structure:
+// [1 word padding | 2 words Prologue block | block 0 | ... | block n | 1 word Epilogue block]
+// 5. Block Structure:
+// [1 Word Header | Payload | [Optional Padding] | [1 Word Footer only in free block]]
+// 5. Aligment: 8 bytes
+// 6. Minimum block size: 8 bytes
+
 /*
  * mm-naive.c - The fastest, least memory-efficient malloc package.
  *
@@ -108,13 +119,8 @@ int mm_init(void) {
  *     Always allocate a block whose size is a multiple of the alignment.
  */
 void *mm_malloc(size_t size) {
-  int newsize = ALIGN(size + SIZE_T_SIZE);
-  void *p = mem_sbrk(newsize);
-  if (p == (void *)-1) return NULL;
-  else {
-    *(size_t *)p = size;
-    return (void *)((char *)p + SIZE_T_SIZE);
-  }
+  size_t asize = ALIGN(size);
+
 }
 
 /*
