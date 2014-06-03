@@ -1,3 +1,5 @@
+// TODO:
+// 1. try implicit list
 /*
  * mm-naive.c - The fastest, least memory-efficient malloc package.
  *
@@ -14,6 +16,7 @@
 #include <assert.h>
 #include <unistd.h>
 #include <string.h>
+#include <stdint.h>
 
 #include "mm.h"
 #include "memlib.h"
@@ -35,20 +38,63 @@ team_t team = {
     ""
 };
 
+#ifdef __x86_64__
+#warning "64"
+#else
+#warning "32"
+#endif
+
 /* single word (4) or double word (8) alignment */
 #define ALIGNMENT 8
 
 /* rounds up to the nearest multiple of ALIGNMENT */
 #define ALIGN(size) (((size) + (ALIGNMENT-1)) & ~0x7)
 
+// if complie with -m32, sizeof(size_t) = 4
+// if complie with -m64, sizeof(size_t) = 8
+// but in either case, ALIGN(sizeof(size_t)) = 8
 #define SIZE_T_SIZE (ALIGN(sizeof(size_t)))
 
+#define WSIZE               4
+#define DSIZE               8
+#define CHUNKSIZE           (1 << 12)               // equal the page size 4kb
+
+// Macro Operations
+#define PACK(size, alloc)                           ((size) | (alloc))
+#define READ_WORD(p)                                (*(uint32_t*)(p))
+#define WRITE_WORD(p, val)                          (*(uint32_t*)(p) = (val))
+#define SIZE_MASK                                   (~(ALIGNMENT - 1))
+#define GET_SIZE(p)                                 (READ_WORD(p) & SIZE_MASK)
+#define GET_ALLOC(p)                                (READ_WORD(p) & 0x1)
+#define HDRP(bp)                                    ((char*)(bp) - WSIZE)
+#define FTRP(bp)                                    ((char*)(bp) + GET_SIZE(HDRP(bp)) - WSIZE)
+#define NEXT_BLKP(bp)                               ((char*)(bp) + GET_SIZE(HDRP(bp)))
+#define PREV_BLKP(bp)                               ((char*)(bp) - GET_SIZE((char*)(bp) - WSIZE))
+
+static void* heap_listp = NULL;
+
+static void *extend_heap(size_t size) {
+  char *bp;
+  size = ALIGN(size);
+}
 
 /*
  * mm_init - initialize the malloc package.
  */
 int mm_init(void) {
-    return 0;
+  // Why 4 * WSIZE
+  // 1 WSIZE for 0 padding
+  // 2 WSIZE for Prologue block
+  // 1 WSIZE for Epllogue block
+  if ((heap_listp = mem_sbrk(4 * WSIZE)) == (void*)(-1)) {
+    return -1;
+  }
+  WRITE_WORD(heap_listp, 0);
+  WRITE_WORD(heap_listp + WSIZE, PACK(DSIZE, 1));           // Prologue header
+  WRITE_WORD(heap_listp + 2 * WSIZE, PACK(DSIZE, 1));       // Prologue footer
+  WRITE_WORD(heap_listp + 3 * WSIZE, PACK(0, 1));           // Epilogue header
+  heap_listp += 2 * WSIZE;
+  return 0;
 }
 
 /*
@@ -87,17 +133,3 @@ void *mm_realloc(void *ptr, size_t size) {
   mm_free(oldptr);
   return newptr;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
