@@ -12,6 +12,7 @@
 // [1 Word Header | Payload | [Optional Padding] | [1 Word Footer only in free block]]
 // 5. Aligment: 8 bytes
 // 6. Minimum block size: 8 bytes
+// 7. extend_heap allocate size which is aiged with page-size
 
 /*
  * mm-naive.c - The fastest, least memory-efficient malloc package.
@@ -68,9 +69,11 @@ team_t team = {
 // but in either case, ALIGN(sizeof(size_t)) = 8
 #define SIZE_T_SIZE (ALIGN(sizeof(size_t)))
 
-#define WSIZE               4
-#define DSIZE               8
-#define CHUNKSIZE           (1 << 12)               // equal the page size 4kb
+#define WSIZE                           4
+#define DSIZE                           8
+#define CHUNKSIZE                       (1 << 12)               // equal the page size 4kb
+// get multiple of CHUNKSIZE
+#define ALIGN_CHUNKSIZE(size)           (((size) + (CHUNKSIZE - 1)) & ~(CHUNKSIZE-1));
 
 // Macro Operations
 #define PACK(size, alloc)                           ((size) | (alloc))
@@ -89,7 +92,8 @@ static void* heap_listp = NULL;
 // Function Declaration
 static void *extend_heap(size_t size);
 static void *coalesce(void *bp);
-
+static void *find_first_fit(size_t size);
+static void place_and_split(void *bp, size_t size);
 
 /*
  * mm_init - initialize the malloc package.
@@ -119,8 +123,22 @@ int mm_init(void) {
  *     Always allocate a block whose size is a multiple of the alignment.
  */
 void *mm_malloc(size_t size) {
-  size_t asize = ALIGN(size);
+  // Ignore spurious requests
+  if (!size) return NULL;
 
+  size_t asize = ALIGN(size + WSIZE);
+  void *bp = find_first_fit(asize);
+
+  if (bp) {
+    place_and_split(bp, asize);
+    return bp;
+  }
+
+  if (!(bp = extend_heap(asize))) {
+    return NULL;
+  }
+
+  place_and_split(bp, asize);
 }
 
 /*
@@ -152,7 +170,7 @@ void *mm_realloc(void *ptr, size_t size) {
 
 static void *extend_heap(size_t size) {
   char *bp;
-  size = ALIGN(size);
+  size = ALIGN_CHUNKSIZE(size);
 
   if ((void*)(bp = mem_sbrk(size)) == (void*)-1) return NULL;
 
@@ -196,4 +214,12 @@ static void *coalesce(void *bp) {
   WRITE_WORD(HDRP(prev_bp), PACK(size, 0));
   WRITE_WORD(FTRP(next_bp), PACK(size, 0));
   return prev_bp;
+}
+
+static void *find_first_fit(size_t size) {
+  ;
+}
+
+static void place_and_split(void *bp, size_t size) {
+  ;
 }
