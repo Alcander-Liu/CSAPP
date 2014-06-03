@@ -73,10 +73,10 @@ team_t team = {
 
 static void* heap_listp = NULL;
 
-static void *extend_heap(size_t size) {
-  char *bp;
-  size = ALIGN(size);
-}
+// Function Declaration
+static void *extend_heap(size_t size);
+static void *coalesce(void *bp);
+
 
 /*
  * mm_init - initialize the malloc package.
@@ -94,6 +94,10 @@ int mm_init(void) {
   WRITE_WORD(heap_listp + 2 * WSIZE, PACK(DSIZE, 1));       // Prologue footer
   WRITE_WORD(heap_listp + 3 * WSIZE, PACK(0, 1));           // Epilogue header
   heap_listp += 2 * WSIZE;
+
+  if (extend_heap(CHUNKSIZE) == NULL) {
+    return -1;
+  }
   return 0;
 }
 
@@ -132,4 +136,21 @@ void *mm_realloc(void *ptr, size_t size) {
   memcpy(newptr, oldptr, copySize);
   mm_free(oldptr);
   return newptr;
+}
+
+static void *extend_heap(size_t size) {
+  char *bp;
+  size = ALIGN(size);
+
+  if ((void*)(bp = mem_sbrk(size)) == (void*)-1) return NULL;
+
+  WRITE_WORD(HDRP(bp), PACK(size, 0));          // Free block header
+  WRITE_WORD(FTRP(bp), PACK(size, 0));          // Free block footer
+  WRITE_WORD(NEXT_BLKP(bp), PACK(0, 1));        // epilogue header
+
+  return coalesce(bp);
+}
+
+static void *coalesce(void *bp) {
+    return NULL;
 }
