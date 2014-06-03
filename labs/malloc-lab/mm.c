@@ -1,5 +1,7 @@
-// TODO:
-// 1. try implicit list
+// This version is same as that one described in the CSAPP
+// Implementation Details
+// 1. use implict free list
+// 2. use immediate coalescing with boundary tags
 /*
  * mm-naive.c - The fastest, least memory-efficient malloc package.
  *
@@ -118,7 +120,11 @@ void *mm_malloc(size_t size) {
 /*
  * mm_free - Freeing a block does nothing.
  */
-void mm_free(void *ptr) {
+void mm_free(void *bp) {
+  size_t size = GET_SIZE(HDRP(bp));
+  WRITE_WORD(HDRP(bp), PACK(size, 0));
+  WRITE_WORD(FTRP(bp), PACK(size, 0));
+  coalesce(bp); // immediate coalescing
 }
 
 /*
