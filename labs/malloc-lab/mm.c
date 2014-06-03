@@ -86,6 +86,7 @@ team_t team = {
 #define FTRP(bp)                                    ((char*)(bp) + GET_SIZE(HDRP(bp)) - WSIZE)
 #define NEXT_BLKP(bp)                               ((char*)(bp) + GET_SIZE(HDRP(bp)))
 #define PREV_BLKP(bp)                               ((char*)(bp) - GET_SIZE((char*)(bp) - WSIZE))
+#define NEXT_BLKP_USE_HDP(hdp)                      ((char*)(hdp) + GET_SIZE(hdp))
 
 static void* heap_listp = NULL;
 
@@ -110,7 +111,7 @@ int mm_init(void) {
   WRITE_WORD(heap_listp + WSIZE, PACK(DSIZE, 1));           // Prologue header
   WRITE_WORD(heap_listp + 2 * WSIZE, PACK(DSIZE, 1));       // Prologue footer
   WRITE_WORD(heap_listp + 3 * WSIZE, PACK(0, 1));           // Epilogue header
-  heap_listp += 2 * WSIZE;
+  heap_listp += 3 * WSIZE;
 
   if (extend_heap(CHUNKSIZE) == NULL) {
     return -1;
@@ -216,10 +217,19 @@ static void *coalesce(void *bp) {
   return prev_bp;
 }
 
+// linear search
 static void *find_first_fit(size_t size) {
-  ;
+  void *hdrp = heap_listp;
+  size_t bp_size;
+  do {
+    bp_size = GET_SIZE(hdrp);
+    if (size <= bp_size) {
+      return hdrp + WSIZE;
+    }
+    hdrp += bp_size;
+  } while (bp_size > 0);
+  return NULL;
 }
 
 static void place_and_split(void *bp, size_t size) {
-  ;
 }
