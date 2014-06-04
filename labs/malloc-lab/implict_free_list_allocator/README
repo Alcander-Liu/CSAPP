@@ -1,52 +1,15 @@
-#####################################################################
-# CS:APP Malloc Lab
-# Handout files for students
-#
-# Copyright (c) 2002, R. Bryant and D. O'Hallaron, All rights reserved.
-# May not be used, modified, or copied without permission.
-#
-######################################################################
-
-***********
-Main Files:
-***********
-
-mm.{c,h}	
-	Your solution malloc package. mm.c is the file that you
-	will be handing in, and is the only file you should modify.
-
-mdriver.c	
-	The malloc driver that tests your mm.c file
-
-short{1,2}-bal.rep
-	Two tiny tracefiles to help you get started. 
-
-Makefile	
-	Builds the driver
-
-**********************************
-Other support files for the driver
-**********************************
-
-config.h	Configures the malloc lab driver
-fsecs.{c,h}	Wrapper function for the different timer packages
-clock.{c,h}	Routines for accessing the Pentium and Alpha cycle counters
-fcyc.{c,h}	Timer functions based on cycle counters
-ftimer.{c,h}	Timer functions based on interval timers and gettimeofday()
-memlib.{c,h}	Models the heap and sbrk function
-
-*******************************
-Building and running the driver
-*******************************
-To build the driver, type "make" to the shell.
-
-To run the driver on a tiny test trace:
-
-	unix> mdriver -V -f short1-bal.rep
-
-The -V option prints out helpful tracing and summary information.
-
-To get a list of the driver flags:
-
-	unix> mdriver -h
-
+This version is same as that one described in the CSAPP
+Implementation Details
+0. Possible Maximum allocate size: 32GB
+1. Free Block Organization: use implict free list
+2. Coalescing: use immediate coalescing with boundary tags
+3. Placement: first-fit
+4. Splitting: Splitting only if the size of the reminder would equal or
+exceed the minimum block size
+5. Structure:
+[1 word padding | 2 words Prologue block | block 0 | ... | block n | 1 word Epilogue block]
+6. Block Structure:
+[1 Word Header | Payload | [Optional Padding] | [1 Word Footer only in free block]]
+7. Aligment: 8 bytes
+8. Minimum block size: 8 bytes
+9. extend_heap allocate size which is aiged with page-size

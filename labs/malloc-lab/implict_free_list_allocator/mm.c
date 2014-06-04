@@ -1,19 +1,3 @@
-// This version is same as that one described in the CSAPP
-// Implementation Details
-// 0. Possible Maximum allocate size: 32GB
-// 1. Free Block Organization: use implict free list
-// 2. Coalescing: use immediate coalescing with boundary tags
-// 3. Placement: first-fit
-// 4. Splitting: Splitting only if the size of the reminder would equal or
-// exceed the minimum block size
-// 5. Structure:
-// [1 word padding | 2 words Prologue block | block 0 | ... | block n | 1 word Epilogue block]
-// 5. Block Structure:
-// [1 Word Header | Payload | [Optional Padding] | [1 Word Footer only in free block]]
-// 5. Aligment: 8 bytes
-// 6. Minimum block size: 8 bytes
-// 7. extend_heap allocate size which is aiged with page-size
-
 /*
  * mm-naive.c - The fastest, least memory-efficient malloc package.
  *
