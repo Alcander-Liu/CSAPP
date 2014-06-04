@@ -79,13 +79,13 @@ team_t team = {
 // ftrp (footer pointer) points to the start address of footer
 // pldp (payload pointer) points to the start address of payload
 
+// tested
 #define CURR_ALLOC                                  (1 << 0)
 #define PREV_ALLOC                                  (1 << 1)
 #define SET_CURR_ALLOC_BIT(p)                       (WRITE_WORD(p, READ_WORD(p) | CURR_ALLOC))
 #define CLR_CURR_ALLOC_BIT(p)                       (WRITE_WORD(p, READ_WORD(p) & ~CURR_ALLOC))
 #define SET_PREV_ALLOC_BIT(p)                       (WRITE_WORD(p, READ_WORD(p) | PREV_ALLOC))
 #define CLR_PREV_ALLOC_BIT(p)                       (WRITE_WORD(p, READ_WORD(p) & ~PREV_ALLOC))
-
 #define PACK(size, alloc)                           ((size) | (alloc))
 #define SIZE_MASK                                   (~(ALIGNMENT - 1))
 #define SET_SIZE(hdrp, size)                        (WRITE_WORD(hdrp, (READ_WORD(hdrp) & (ALIGNMENT-1)) | size))
@@ -95,14 +95,13 @@ team_t team = {
 #define HDRP_USE_PLDP(pldp)                         ((char*)(pldp) - WSIZE)  // get hdrp using pldp
 #define FTRP_USE_PLDP(pldp)                         ((char*)(pldp) + GET_SIZE(HDRP_USE_PLDP(pldp)) - DSIZE)  // get ftrp using pldp
 
+// not yet
 #define PREV_FTRP_USE_PLDP(pldp)                    ((char*)HDRP_USE_PLDP(pldp) - WSIZE)  // get previous block footer using current pldp
 #define NEXT_HDRP_USE_PLDP(pldp)                    (HDRP_USE_PLDP((char*)(pldp) + GET_SIZE(HDRP_USE_PLDP(pldp))))  // get the next block header using current pldp
 #define PREV_HDRP_USE_PLDP(pldp)                    (HDRP_USE_PLDP((char*)(pldp) - GET_SIZE(PREV_FTRP_USE_PLDP(pldp))))) // get the header of previous using current pldp
-
 #define NEXT_PLDP_USE_PLDP(pldp)                    ((char*)(pldp) + GET_SIZE(HDRP_USE_PLDP(pldp)))  // get next block pldp using current pldp
 #define PREV_PLDP_USE_PLDP(pldp)                    ((char*)(pldp) - GET_SIZE(PREV_FTRP_USE_PLDP(pldp)))  // get previous block pldp using current pldp
 #define NEXT_PLDP_USE_HDRP(hdrp)                    ((char*)(hdrp) + GET_SIZE(hdrp) + WSIZE)  // get the next pldp using current hdrp
-
 #define NEXT_HDRP_USE_HDRP(hdrp)                    ((char*)(hdrp) + GET_SIZE(hdrp))
 
 // Function Declaration
@@ -113,6 +112,8 @@ static void *coalesce(void *pldp);
 static void *find_first_fit(size_t asize);
 // the input size should be aligned
 static void place_and_split(void *pldp, size_t asize);
+static int check_heap(void);
+void show_heap(void);
 
 // For Debug
 #define __HEAP_CHECK__
@@ -159,7 +160,7 @@ void *mm_malloc(size_t size) {
   // Ignore spurious requests
   if (!size) return NULL;
   size_t asize = ALIGN(size + WSIZE);
-  DebugStr("mm_malloc with size: %u\n", asize);
+  // DebugStr("mm_malloc with size: %u\n", asize);
   void *pldp = find_first_fit(asize);
   if (pldp) {
     place_and_split(pldp, asize);
@@ -180,7 +181,7 @@ void *mm_malloc(size_t size) {
 void mm_free(void *pldp) {
   void *hdrp = (char*)pldp - WSIZE;
   size_t size = GET_SIZE(hdrp);
-  DebugStr("mm_free with size: %u\n", size);
+  // DebugStr("mm_free with size: %u\n", size);
   CLR_CURR_ALLOC_BIT(hdrp);
   WRITE_WORD((char*)hdrp + size - WSIZE, READ_WORD(hdrp)); // footer is same as header
   CLR_PREV_ALLOC_BIT((char*)hdrp + size); // clear the prev_alloc bit of next block, since current block is free
@@ -205,11 +206,16 @@ void *mm_realloc(void *ptr, size_t size) {
 }
 
 static void *extend_heap(size_t size) {
-  DebugStr("extend heap...\n");
+  // DebugStr("extend heap...\n");
   char *hdrp;
   size_t asize = ALIGN_CHUNKSIZE(size);
   if ((void*)(hdrp = mem_sbrk(asize)) == (void*)(-1)) return NULL;
   hdrp = (char*)hdrp - WSIZE; // points to the old Epliogue header
+
+  #ifdef __HEAP_CHECK__
+  heap_tail += asize;
+  #endif
+
   WRITE_WORD(hdrp, PACK(asize, GET_PREV_ALLOC(hdrp))); // set new header
   WRITE_WORD((char*)hdrp + asize - WSIZE, READ_WORD(hdrp)); // footer is same as header
   WRITE_WORD(hdrp + asize, PACK(0, CURR_ALLOC)); // write new epilogue block
@@ -240,7 +246,7 @@ static void *coalesce(void *pldp) {
     void *next_hdrp = (char*)hdrp + size;
     size_t next_size = GET_SIZE(next_hdrp);
     WRITE_WORD(hdrp, READ_WORD(hdrp) + next_size); // write new header in current block
-    WRITE_WORD((char*)next_hdrp + next_size, READ_WORD(hdrp)); // write new footer in next block
+    WRITE_WORD((char*)next_hdrp + next_size - WSIZE, READ_WORD(hdrp)); // write new footer in next block
     return pldp;
   }
 
@@ -256,19 +262,19 @@ static void *coalesce(void *pldp) {
 
 // linear search
 static void *find_first_fit(size_t asize) {
-  DebugStr("find_first_fit...");
+  // DebugStr("find_first_fit...");
   void *hdrp = heap_listp;
   size_t b_size;
   do {
     b_size = GET_SIZE(hdrp);
-    DebugStr("b_size = %u...", b_size);
+    // DebugStr("b_size = %u...", b_size);
     if (asize <= b_size && !GET_ALLOC(hdrp)) {
-      DebugStr("Enough...\n");
+      // DebugStr("Enough...\n");
       return (char*)hdrp + WSIZE;
     }
     hdrp = (char*)hdrp + b_size;
   } while (b_size > 0);
-  DebugStr("\n");
+  // DebugStr("\n");
   return NULL;
 }
 
@@ -276,10 +282,10 @@ static void place_and_split(void *pldp, size_t asize) {
   void *hdrp = HDRP_USE_PLDP(pldp);
   size_t b_size = GET_SIZE(hdrp);
   size_t left_size = b_size - asize;
-  DebugStr("left size %u...", left_size);
+  // DebugStr("left size %u...", left_size);
   // split
   if (left_size && IS_ALIGN_WITH_MIN_BK_SIZE(left_size)) { // reminder > 0 and is multiple of minimum blockasize
-    DebugStr("split...\n");
+    // DebugStr("split...\n");
     void *new_free_hdrp = (char*)hdrp + asize;
     WRITE_WORD(new_free_hdrp, PACK(left_size, 0));
     WRITE_WORD((char*)new_free_hdrp + left_size - WSIZE, READ_WORD(new_free_hdrp));
@@ -287,14 +293,43 @@ static void place_and_split(void *pldp, size_t asize) {
   }
   SET_SIZE(hdrp, b_size);
   SET_CURR_ALLOC_BIT(hdrp);
-  WRITE_WORD((char*)hdrp + b_size - WSIZE, READ_WORD(hdrp));
-  SET_PREV_ALLOC_BIT((char*)hdrp + b_size);
+  // WRITE_WORD((char*)hdrp + b_size - WSIZE, READ_WORD(hdrp));
+  void *next_hdrp = (char*)hdrp + b_size;
+  SET_PREV_ALLOC_BIT(next_hdrp);
+  SET_PREV_ALLOC_BIT((char*)next_hdrp + GET_SIZE(next_hdrp) - WSIZE);
 }
 
 void pointer_macro_test() {
   assert(CURR_ALLOC == 0x1);
   assert(PREV_ALLOC == 0x2);
   assert(SIZE_MASK == 0xFFFFFFF8);
+
+  size_t word1 = 0xF0E1B1;
+  size_t word2;
+  assert(READ_WORD(&word1) == word1);
+  WRITE_WORD(&word2, word1);
+  assert(READ_WORD(&word2) == word1);
+
+  size_t header1 = 0x0;
+  SET_CURR_ALLOC_BIT(&header1);
+  assert(header1 == 0x1);
+  CLR_CURR_ALLOC_BIT(&header1);
+  assert(header1 == 0x0);
+
+  SET_PREV_ALLOC_BIT(&header1);
+  assert(header1 == 0x2);
+  CLR_PREV_ALLOC_BIT(&header1);
+  assert(header1 == 0x0);
+
+  header1 = 0x3;
+  SET_SIZE(&header1, 0x300);
+  assert(header1 == 0x303);
+  assert(GET_SIZE(&header1) == 0x300);
+  assert(GET_ALLOC(&header1) == 0x1);
+  assert(GET_PREV_ALLOC(&header1) == 0x2);
+
+  assert(HDRP_USE_PLDP((void*)&header1 + WSIZE) == (void*)&header1);
+  assert(FTRP_USE_PLDP((void*)&header1 + WSIZE) == (void*)((char*)&header1 + 0x300 - WSIZE));
 }
 
 void ToBinaryStr(size_t num, int sep) {
@@ -320,4 +355,32 @@ void ToHexStr(size_t num, int sep) {
     }
   }
   fprintf(stderr, "\n");
+}
+
+void show_heap(void) {
+  void* p = heap_head;
+  DebugStr("-----------------\n");
+  DebugStr("heap_head = %x, heap size = %u\n", p, (char*)heap_tail  - (char*)heap_head - 3 * WSIZE);
+  DebugStr("-----------------\n");
+  DebugStr("%x\n", (char*)p + WSIZE);
+  DebugStr("%x\n", (char*)p + 2 * WSIZE);
+  DebugStr("-----------------\n");
+  p = (char*)p + 3 * WSIZE;
+  assert(p <= heap_tail);
+  while (GET_SIZE(p) > 0) {
+    assert(p <= heap_tail);
+    DebugStr("hdrp:%x val = ", p);
+    ToHexStr(*(size_t*)p, 1);
+    DebugStr("size = %u, ALLOC = %d, PREV_ALLOC = %d\n", GET_SIZE(p), !!GET_ALLOC(p), !!GET_PREV_ALLOC(p));
+    void *ftrp = (char*)p + GET_SIZE(p) - WSIZE;
+    DebugStr("ftrp:%x val = ", ftrp);
+    ToHexStr(*(size_t*)ftrp, 1);
+    if (!GET_ALLOC(p)) { // if current block is not allocated, header = footer
+      assert(READ_WORD(p) == READ_WORD(ftrp));
+    }
+    DebugStr("-----------------\n");
+    p += GET_SIZE(p);
+  }
+  DebugStr("heap_tail = %x\n", p);
+  DebugStr("-----------------\n");
 }
