@@ -107,7 +107,7 @@ team_t team = {
 */
 
 // For Debug
-// #define __HEAP_CHECK__
+#define __HEAP_CHECK__
 #ifdef __HEAP_CHECK__
 static void* heap_head = NULL; // points to heap start
 static void* heap_tail = NULL; // points to heap end, as Epilogue header
