@@ -124,6 +124,9 @@ static void *find_first_fit(size_t asize);
 // the input size should be aligned
 static void place_and_split(void *pldp, size_t asize);
 
+static void *forward_collect(void *hdrp, size_t *collected_size, size_t target_size);
+static void *backward_collect(void *hdrp, size_t *collected_size, size_t target_size);
+
 #ifdef __HEAP_CHECK__
 static int check_heap(void);
 void show_heap(void);
@@ -184,30 +187,45 @@ void *mm_malloc(size_t size) {
 /*
  * mm_free - Freeing a block does nothing.
  */
-void mm_free(void *pldp) {
-  void *hdrp = (char*)pldp - WSIZE;
+void mm_free(void *ptr) {
+  void *hdrp = (char*)ptr - WSIZE;
   size_t size = GET_SIZE(hdrp);
   CLR_CURR_ALLOC_BIT(hdrp);
   WRITE_WORD((char*)hdrp + size - WSIZE, READ_WORD(hdrp)); // footer is same as header
   CLR_PREV_ALLOC_BIT((char*)hdrp + size); // clear the prev_alloc bit of next block, since current block is free
-  coalesce(pldp); // immediate coalescing
+  coalesce(ptr); // immediate coalescing
 }
 
 /*
  * mm_realloc - Implemented simply in terms of mm_malloc and mm_free
  */
+//
 void *mm_realloc(void *ptr, size_t size) {
-  void *oldptr = ptr;
-  void *newptr;
-  size_t copySize;
+  if (!ptr) return mm_malloc(size);
+  void *hdrp = HDRP_USE_PLDP(ptr);
+  size_t old_size = GET_SIZE(hdrp);
+  size_t new_size = ALIGN(size + WSIZE);
+  if (new_size <= old_size) {
+    place_and_split(ptr, new_size);
+    return ptr;
+  }
 
-  newptr = mm_malloc(size);
-  if (newptr == NULL) return NULL;
-  copySize = *(size_t *)((char *)oldptr - SIZE_T_SIZE);
-  if (size < copySize) copySize = size;
-  memcpy(newptr, oldptr, copySize);
-  mm_free(oldptr);
-  return newptr;
+  void *new_ptr = find_first_fit(new_size);
+  if (new_ptr) {
+    place_and_split(new_ptr, new_size);
+    memcpy(new_ptr, ptr, old_size - WSIZE);
+    mm_free(ptr);
+    return new_ptr;
+  }
+
+  if ((void*)(new_ptr = extend_heap(new_size)) == (void*)-1) {
+    return NULL;
+  }
+
+  place_and_split(new_ptr, new_size);
+  memcpy(new_ptr, ptr, old_size - WSIZE);
+  mm_free(ptr);
+  return new_ptr;
 }
 
 static void *extend_heap(size_t size) {
@@ -239,7 +257,7 @@ static void *coalesce(void *pldp) {
 
   // previous is free but next is allocated
   if (!prev_alloc && next_alloc) {
-    void *prev_hdrp = (char*)hdrp - GET_SIZE(hdrp - WSIZE); // get previous block header pointer
+    void *prev_hdrp = (char*)hdrp - GET_SIZE((char*)hdrp - WSIZE); // get previous block header pointer
     WRITE_WORD(prev_hdrp, READ_WORD(prev_hdrp) + size); // write new header in previous block
     WRITE_WORD((char*)hdrp + size - WSIZE, READ_WORD(prev_hdrp)); // write new footer in current block
     return (char*)prev_hdrp + WSIZE;
@@ -297,6 +315,22 @@ static void place_and_split(void *pldp, size_t asize) {
   SET_PREV_ALLOC_BIT((char*)next_hdrp + GET_SIZE(next_hdrp) - WSIZE);
   #endif __HEAP_CHECK__
 }
+
+static void *forward_collect(void *hdrp, size_t *collected_size, size_t target_size) {
+  if (!GET_PREV_ALLOC(hdrp)) return NULL;
+  size_t old_size = GET_SIZE(hdrp);
+  if (old_size + *collected_size >= target_size) return NULL;
+  hdrp = (char*)hdrp - GET_SIZE((char*)hdrp - WSIZE);
+  *collected_size += GET_SIZE(hdrp);
+  while ((old_size + collected_size < target_size) && GET_PREV_ALLOC(hdrp)) {
+    ;
+  }
+}
+
+static void *backward_collect(void *hdrp, size_t *collected_size, size_t target_size) {
+  ;
+}
+
 
 void pointer_macro_test() {
   assert(CURR_ALLOC == 0x1);
