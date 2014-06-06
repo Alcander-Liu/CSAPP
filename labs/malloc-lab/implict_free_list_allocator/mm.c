@@ -26,7 +26,16 @@
 #include "mm.h"
 #include "memlib.h"
 
+// Control Marcos
+#define __LOG_TO_STDERR__
+#define __HEAP_CHECK__
+
+
+#ifdef __LOG_TO_STDERR__
 #define DebugStr(args...)   fprintf(stderr, args);
+#else
+#define DebugStr(args...)
+#endif
 // #define assert(ass) if(!ass) {fprintf(stderr, "line %d\n", __LINE__); abort();}
 
 /*********************************************************
@@ -64,7 +73,6 @@ team_t team = {
 
 
 // For Debug
-// #define __HEAP_CHECK__
 #ifdef __HEAP_CHECK__
 static int writable = 1;
 static void* heap_head = NULL; // points to heap start
@@ -80,8 +88,8 @@ typedef struct HeapStruct {
   struct HeapStruct *next;
 } HeapStruct;
 
-static HeapStruct *alloc_list;
-static HeapStruct *free_list;
+static HeapStruct *alloc_list = NULL;
+static HeapStruct *free_list = NULL;
 
 void add_to_alloc_list(const void *ptr, const size_t pl_size, const size_t bk_size);
 void delete_from_alloc_list(const void *ptr);
@@ -91,9 +99,6 @@ HeapStruct* search_list(const HeapStruct *list, const void *ptr);
 int addr_is_allocated(const char *addr);
 int addr_is_payload(const char *addr);
 int within_heap(const void *addr);
-void save_index(void);
-void check_index(void);
-int check_heap(void);
 void show_heap(void);
 void show_alloc_list(void);
 
@@ -190,6 +195,9 @@ void PrintStackTrace(int signum) {
 int mm_init(void) {
 #ifdef __HEAP_CHECK__
   Signal(SIGABRT, PrintStackTrace);
+  heap_head = NULL;
+  heap_tail = NULL;
+  alloc_list = NULL;
 #endif
   // Why 4 * WSIZE
   // 1 WSIZE for 0 padding
@@ -199,10 +207,10 @@ int mm_init(void) {
     return -1;
   }
 
-  #ifdef __HEAP_CHECK__
+#ifdef __HEAP_CHECK__
   heap_head = heap_listp;
   heap_tail = heap_listp + 4 * WSIZE;
-  #endif
+#endif
 
   WRITE_WORD(heap_listp, 0); // 1 WSIZE for 0 padding
   WRITE_WORD(heap_listp + WSIZE, PACK(DSIZE, PREV_ALLOC | CURR_ALLOC));  // Prologue header
@@ -280,13 +288,28 @@ void *mm_realloc(void *ptr, size_t size) {
 
   old_size = GET_SIZE(hdrp); // update the block size pointed by hdrp
   if (target_size <= old_size) {
+
+#ifdef __HEAP_CHECK__
+    delete_from_alloc_list(ptr);
+#endif
+
     place_and_split(ptr, target_size);
+
+#ifdef __HEAP_CHECK__
+    add_to_alloc_list(ptr, size, target_size);
+#endif
+
     return ptr;
   }
 
   size_t collected_size = 0;
   void *new_hdrp = forward_collect(hdrp, &collected_size, target_size);
   if (target_size <= collected_size + old_size) {
+
+#ifdef __HEAP_CHECK__
+    delete_from_alloc_list(ptr);
+#endif
+
     size_t new_size = collected_size + old_size;
     mm_memcpy((char*)new_hdrp + WSIZE, ptr, ori_size - WSIZE); // copy payload
     size_t left_size = new_size - target_size;
@@ -300,6 +323,11 @@ void *mm_realloc(void *ptr, size_t size) {
     SET_SIZE(new_hdrp, new_size);
     SET_CURR_ALLOC_BIT(new_hdrp);
     SET_PREV_ALLOC_BIT((char*)new_hdrp + new_size);
+
+#ifdef __HEAP_CHECK__
+    add_to_alloc_list(new_hdrp + WSIZE, size, target_size);
+#endif
+
     return new_hdrp + WSIZE;
   }
 
@@ -308,6 +336,10 @@ void *mm_realloc(void *ptr, size_t size) {
     place_and_split(new_pldp, target_size);
     mm_memcpy(new_pldp, ptr, ori_size - WSIZE);
     mm_free(ptr);
+
+#ifdef __HEAP_CHECK__
+    add_to_alloc_list(new_pldp, size, target_size);
+#endif
     return new_pldp;
   }
 
@@ -316,21 +348,34 @@ void *mm_realloc(void *ptr, size_t size) {
   place_and_split(new_pldp, target_size);
   mm_memcpy(new_pldp, ptr, ori_size - WSIZE);
   mm_free(ptr);
+#ifdef __HEAP_CHECK__
+  add_to_alloc_list(new_pldp, size, target_size);
+#endif
   return new_pldp;
 }
 
 void *extend_heap(size_t size) {
-  char *hdrp;
+  char *hdrp = NULL;
   size_t asize = ALIGN_CHUNKSIZE(size);
   if ((void*)(hdrp = mem_sbrk(asize)) == (void*)(-1)) return NULL;
+
+#ifdef __HEAP_CHECK__
+  assert(hdrp == heap_tail);
+  heap_tail += asize;
+#endif
+
   hdrp = (char*)hdrp - WSIZE; // points to the old Epliogue header
 
-  #ifdef __HEAP_CHECK__
-  heap_tail += asize;
-  #endif
+#ifdef __HEAP_CHECK__
+  assert(!addr_is_allocated(hdrp));
+  assert(!addr_is_allocated((char*)hdrp + asize));
+#endif
 
   WRITE_WORD(hdrp, PACK(asize, GET_PREV_ALLOC(hdrp))); // set new header
   WRITE_WORD((char*)hdrp + asize - WSIZE, READ_WORD(hdrp)); // footer is same as header
+#ifdef __HEAP_CHECK__
+  assert((hdrp + asize) == ((char*)heap_tail - WSIZE));
+#endif
   WRITE_WORD(hdrp + asize, PACK(0, CURR_ALLOC)); // write new epilogue block
   return coalesce((char*)hdrp + WSIZE);
 }
@@ -551,6 +596,7 @@ void add_to_alloc_list(const void *ptr, const size_t pl_size, const size_t bk_si
   assert(new_node->bk_tail - new_node->bk_head == bk_size);
   assert(new_node->bk_head < new_node->pl_head);
   assert(new_node->bk_tail >= new_node->pl_tail);
+  assert(new_node->pl_tail < (char*)heap_tail);
 }
 
 void delete_from_alloc_list(const void *ptr) {
@@ -615,32 +661,6 @@ int addr_is_payload(const char *addr) {
 
 int within_heap(const void *addr) {
   return (addr >= heap_head && addr < heap_tail);
-}
-
-void save_index(void) {
-  HeapStruct* alist = alloc_list;
-  while (alist) {
-    alist->index = *((char*)alist->pl_head);
-    alist = alist->next;
-  }
-}
-
-void check_index(void) {
-  HeapStruct* alist = alloc_list;
-  while (alist) {
-    // DebugStr("index:%d, ptr:%x\n", alist->index, alist->pl_head);
-    assert(alist->index != -1);
-    int i = 0;
-    for (i = 0; i < alist->pl_size; ++i) {
-      assert(*((char*)alist->pl_head + i) == alist->index);
-    }
-    alist = alist->next;
-  }
-  DebugStr("finish.\n");
-}
-
-int check_heap() {
-  ;
 }
 
 void show_heap(void) {

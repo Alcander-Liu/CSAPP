@@ -30,9 +30,20 @@
   "random-bal.rep",\
   "random2-bal.rep",\
   "binary-bal.rep",\
-  "binary2-bal.rep"
-  // "realloc-bal.rep",\
-  // "realloc2-bal.rep"
+  "binary2-bal.rep",\
+  "realloc-bal.rep",\
+  "realloc2-bal.rep",\
+  "amptjp.rep",\
+  "cccp.rep",\
+  "cp-decl.rep",\
+  "expr.rep",\
+  "coalescing.rep",\
+  "random.rep",\
+  "random2.rep",\
+  "binary.rep",\
+  "binary2.rep",\
+  "realloc.rep",\
+  "realloc2.rep"
 // #define DEFAULT_TRACEFILES \
   // "amptjp-bal.rep",\
   // "cccp-bal.rep",\
