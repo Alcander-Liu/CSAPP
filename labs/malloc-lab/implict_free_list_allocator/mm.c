@@ -27,9 +27,6 @@
 #include "memlib.h"
 
 // Control Marcos
-#define __LOG_TO_STDERR__
-#define __HEAP_CHECK__
-
 
 #ifdef __LOG_TO_STDERR__
 #define DebugStr(args...)   fprintf(stderr, args);
@@ -235,7 +232,6 @@ void *mm_malloc(size_t size) {
   void *ret = NULL;
   size_t asize = ALIGN(size + WSIZE);
 
-  // DebugStr("mm_malloc with size: %u\n", asize);
   void *pldp = find_first_fit(asize);
   if (pldp) {
 
