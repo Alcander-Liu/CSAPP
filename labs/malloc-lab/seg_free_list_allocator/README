@@ -1,0 +1,17 @@
+This version used the segregated free list
+Implementation Details
+0. Possible Maximum allocate size: 32GB
+1. Free Block Organization: use segregated free list
+2. Coalescing: use [?immediate] coalescing with boundary tags
+3. Placement: first-fit
+4. Splitting: Splitting only if the size of the reminder would equal or exceed the minimum block size
+5. Structure: [ array_of_list | ?padding | blocks | ?padding ]
+6. Block Structure:
+   - allocated block: [1 word Header | ... payload ... | optional padding ]
+   - free block: [ 1 word header] | 1 word prev_pointer | 1 word next_pointer | .... | 1 word footer ]
+7. Minimum block size: 16 bytes
+8.
+7. Header Structure:
+   - [31 - 3] bit for size
+   - [2] not used
+   - [0] alloc        : indicate whether or current block is allocated
