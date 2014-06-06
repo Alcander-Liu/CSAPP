@@ -1,3 +1,6 @@
+#ifndef __MM_H__
+#define __MM_H__
+
 #include <stdio.h>
 
 extern int mm_init (void);
@@ -22,3 +25,6 @@ typedef struct {
 
 extern team_t team;
 
+extern void TestAllocList(void);
+
+#endif
