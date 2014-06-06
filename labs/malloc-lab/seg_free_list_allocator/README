@@ -2,16 +2,30 @@ This version used the segregated free list
 Implementation Details
 0. Possible Maximum allocate size: 32GB
 1. Free Block Organization: use segregated free list
-2. Coalescing: use [?immediate] coalescing with boundary tags
+2. Coalescing: use immediate coalescing with boundary tags
 3. Placement: first-fit
 4. Splitting: Splitting only if the size of the reminder would equal or exceed the minimum block size
-5. Structure: [ array_of_list | ?padding | blocks | ?padding ]
+5. Heap Structure
+   [ 1 word padding | block 0 | block 1 | ... ]
 6. Block Structure:
    - allocated block: [1 word Header | ... payload ... | optional padding ]
    - free block: [ 1 word header] | 1 word prev_pointer | 1 word next_pointer | .... | 1 word footer ]
 7. Minimum block size: 16 bytes
-8.
-7. Header Structure:
+8. Header Structure:
    - [31 - 3] bit for size
    - [2] not used
    - [0] alloc        : indicate whether or current block is allocated
+9. Size classes: power of 2
+   - [16 ~ 31]
+   - [32 ~ 63]
+   - ...
+   - [2^31 ~ (2^32)-1]
+   - total: 28 classes, so we need a static global void* array of size 28
+10. How to order free block in each list ?
+   - choice 1 ordering by address
+   - choice 2 LIFO
+11. Analysis
+   - malloc is linear to the size of one size class, worse case O(N)
+   - free is linear to the size of one size class, if choose ordering by address, otherwise constant time
+   -
+
