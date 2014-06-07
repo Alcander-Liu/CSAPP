@@ -5,7 +5,6 @@
 #include <check.h>
 #include "mm.h"
 #include "mm_macros.h"
-#define __LIFO_ORDERING__
 START_TEST (test_macros) {
   ck_assert(ALIGNMENT == 8);
   ck_assert(MIN_BK_SIZE == 16);
@@ -105,9 +104,9 @@ START_TEST(insert_into_size_class_test) {
   insert_into_size_class(&arr[12], find_index(4 * WSIZE));
 
 #ifdef __LIFO_ORDERING__
-  void *ordering[] = {arr + 12, arr + 8, arr + 4, arr + 0};
+  size_t *ordering[] = {arr + 12, arr + 8, arr + 4, arr + 0};
 #else
-  void *ordering[] = {arr + 0, arr + 4, arr + 8, arr + 12};
+  size_t *ordering[] = {arr + 0, arr + 4, arr + 8, arr + 12};
 #endif
 
   ck_assert(find_index(4 * WSIZE) == 0);
@@ -138,9 +137,9 @@ START_TEST(delete_from_size_class_middle_node) {
   insert_into_size_class(&arr[12], find_index(4 * WSIZE));
 
 #ifdef __LIFO_ORDERING__
-  void *ordering[] = {arr + 12, arr + 8, arr + 0};
+  size_t *ordering[] = {arr + 12, arr + 8, arr + 0};
 #else
-  void *ordering[] = {arr + 0, arr + 8, arr + 12};
+  size_t *ordering[] = {arr + 0, arr + 8, arr + 12};
 #endif
   ck_assert(find_index(4 * WSIZE) == 0);
   delete_from_size_class(arr + 4, find_index(4 * WSIZE));
@@ -172,11 +171,11 @@ START_TEST(delete_from_size_class_first_node) {
   insert_into_size_class(&arr[12], find_index(4 * WSIZE));
 
 #ifdef __LIFO_ORDERING__
-  void *ordering[] = {arr + 8, arr + 4, arr + 0};
-  void *del_head = arr + 12;
+  size_t *ordering[] = {arr + 8, arr + 4, arr + 0};
+  size_t *del_head = arr + 12;
 #else
-  void *ordering[] = {arr + 4, arr + 8, arr + 12};
-  void *del_head = arr + 0;
+  size_t *ordering[] = {arr + 4, arr + 8, arr + 12};
+  size_t *del_head = arr + 0;
 #endif
   ck_assert(find_index(4 * WSIZE) == 0);
   delete_from_size_class(del_head, find_index(4 * WSIZE));
@@ -191,6 +190,86 @@ START_TEST(delete_from_size_class_first_node) {
 }
 END_TEST
 
+extern void *coalesce(void *pldp);
+START_TEST(coalesce_test_head) {
+  int i = 0;
+  for (; i < index_arr_size; ++i) {
+    segregated_free_list[i] = NULL;
+  }
+
+  size_t arr[18];
+  arr[0] = PACK(0, 1);
+  arr[17] = PACK(0, 1);
+  init_free_block(&arr[1], 4 * WSIZE);
+  init_free_block(&arr[5], 4 * WSIZE);
+  init_free_block(&arr[9], 4 * WSIZE);
+  init_free_block(&arr[13], 4 * WSIZE);
+  insert_into_size_class(&arr[1], find_index(4 * WSIZE));
+  insert_into_size_class(&arr[5], find_index(4 * WSIZE));
+  insert_into_size_class(&arr[9], find_index(4 * WSIZE));
+  insert_into_size_class(&arr[13], find_index(4 * WSIZE));
+
+  void *head = (char*)coalesce((arr + 1) + 1) - WSIZE;
+  ck_assert(head == arr + 1);
+  ck_assert(!is_in_size_class(arr + 1, find_index(4 * WSIZE)));
+  ck_assert(!is_in_size_class(arr + 5, find_index(4 * WSIZE)));
+  ck_assert(is_in_size_class(head, find_index(8 * WSIZE)));
+}
+END_TEST
+
+START_TEST(coalesce_test_middle) {
+  int i = 0;
+  for (; i < index_arr_size; ++i) {
+    segregated_free_list[i] = NULL;
+  }
+
+  size_t arr[18];
+  arr[0] = PACK(0, 1);
+  arr[17] = PACK(0, 1);
+  init_free_block(&arr[1], 4 * WSIZE);
+  init_free_block(&arr[5], 4 * WSIZE);
+  init_free_block(&arr[9], 4 * WSIZE);
+  init_free_block(&arr[13], 4 * WSIZE);
+  insert_into_size_class(&arr[1], find_index(4 * WSIZE));
+  insert_into_size_class(&arr[5], find_index(4 * WSIZE));
+  insert_into_size_class(&arr[9], find_index(4 * WSIZE));
+  insert_into_size_class(&arr[13], find_index(4 * WSIZE));
+
+  void *head = (char*)coalesce((arr + 5) + 1) - WSIZE;
+  ck_assert(head == arr + 1);
+  ck_assert(!is_in_size_class(arr + 1, find_index(4 * WSIZE)));
+  ck_assert(!is_in_size_class(arr + 5, find_index(4 * WSIZE)));
+  ck_assert(!is_in_size_class(arr + 9, find_index(4 * WSIZE)));
+  ck_assert(is_in_size_class(head, find_index(12 * WSIZE)));
+}
+END_TEST
+
+START_TEST(coalesce_test_tail) {
+  int i = 0;
+  for (; i < index_arr_size; ++i) {
+    segregated_free_list[i] = NULL;
+  }
+
+  size_t arr[18];
+  arr[0] = PACK(0, 1);
+  arr[17] = PACK(0, 1);
+  init_free_block(&arr[1], 4 * WSIZE);
+  init_free_block(&arr[5], 4 * WSIZE);
+  init_free_block(&arr[9], 4 * WSIZE);
+  init_free_block(&arr[13], 4 * WSIZE);
+  insert_into_size_class(&arr[1], find_index(4 * WSIZE));
+  insert_into_size_class(&arr[5], find_index(4 * WSIZE));
+  insert_into_size_class(&arr[9], find_index(4 * WSIZE));
+  insert_into_size_class(&arr[13], find_index(4 * WSIZE));
+
+  void *head = (char*)coalesce((arr + 13) + 1) - WSIZE;
+  ck_assert(head == arr + 9);
+  ck_assert(!is_in_size_class(arr + 9, find_index(4 * WSIZE)));
+  ck_assert(!is_in_size_class(arr + 13, find_index(4 * WSIZE)));
+  ck_assert(is_in_size_class(head, find_index(8 * WSIZE)));
+}
+END_TEST
+
 Suite *test_suit(void) {
   Suite *s = suite_create("test");
   TCase *tc_core = tcase_create("Core");
@@ -200,6 +279,9 @@ Suite *test_suit(void) {
   tcase_add_test(tc_core, insert_into_size_class_test);
   tcase_add_test(tc_core, delete_from_size_class_middle_node);
   tcase_add_test(tc_core, delete_from_size_class_first_node);
+  tcase_add_test(tc_core, coalesce_test_head);
+  tcase_add_test(tc_core, coalesce_test_middle);
+  tcase_add_test(tc_core, coalesce_test_tail);
   suite_add_tcase(s, tc_core);
   return s;
 }

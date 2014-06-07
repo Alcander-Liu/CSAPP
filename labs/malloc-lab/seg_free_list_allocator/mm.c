@@ -41,7 +41,6 @@ Implementation Details
 // Control Marcos
 // #define __HEAP_CHECK__
 // #define __LOG_TO_STDERR__
-#define __LIFO_ORDERING__
 #ifdef __LOG_TO_STDERR__
 #define DebugStr(args...)   fprintf(stderr, args);
 #else
@@ -268,28 +267,42 @@ void *coalesce(void *pldp) {
 
   // previous is free but next is allocated
   if (!prev_alloc && next_alloc) {
+    size_t prev_bk_size = GET_SIZE((char*)hdrp - WSIZE);
     void *prev_hdrp = (char*)hdrp - GET_SIZE((char*)hdrp - WSIZE); // get previous block header pointer
-    WRITE_WORD(prev_hdrp, READ_WORD(prev_hdrp) + size); // write new header in previous block
-    WRITE_WORD((char*)hdrp + size - WSIZE, READ_WORD(prev_hdrp)); // write new footer in current block
+    delete_from_size_class(prev_hdrp, find_index(prev_bk_size)); // delete previous block from free list
+    delete_from_size_class(hdrp, find_index(size)); // delete current block from free list
+
+    size_t new_size = prev_bk_size + size;
+    init_free_block(prev_hdrp, new_size);
+    insert_into_size_class(prev_hdrp, find_index(new_size));
     return (char*)prev_hdrp + WSIZE;
   }
 
   // next is free but previous is allocated
   if (prev_alloc && !next_alloc) {
     void *next_hdrp = (char*)hdrp + size;
-    size_t next_size = GET_SIZE(next_hdrp);
-    WRITE_WORD(hdrp, READ_WORD(hdrp) + next_size); // write new header in current block
-    WRITE_WORD((char*)next_hdrp + next_size - WSIZE, READ_WORD(hdrp)); // write new footer in next block
+    size_t next_bk_size = GET_SIZE(next_hdrp);
+    delete_from_size_class(next_hdrp, find_index(next_bk_size));
+    delete_from_size_class(hdrp, find_index(size));
+
+    size_t new_size = next_bk_size + size;
+    init_free_block(hdrp, new_size);
+    insert_into_size_class(hdrp, find_index(new_size));
     return pldp;
   }
 
   // previous and next are both free
-  size_t prev_size = GET_SIZE((char*)hdrp - WSIZE);
+  size_t prev_bk_size = GET_SIZE((char*)hdrp - WSIZE);
+  void *prev_hdrp = (char*)hdrp - prev_bk_size;
   void *next_hdrp = (char*)hdrp + size;
-  void *prev_hdrp = (char*)hdrp - prev_size;
-  size_t next_size = GET_SIZE(next_hdrp);
-  WRITE_WORD(prev_hdrp, READ_WORD(prev_hdrp) + size + next_size); // write new header
-  WRITE_WORD((char*)next_hdrp + next_size - WSIZE, READ_WORD(prev_hdrp));
+  size_t next_bk_size = GET_SIZE(next_hdrp);
+
+  delete_from_size_class(prev_hdrp, find_index(prev_bk_size));
+  delete_from_size_class(next_hdrp, find_index(next_bk_size));
+  delete_from_size_class(hdrp, find_index(size));
+  size_t new_size = prev_bk_size + next_bk_size + size;
+  init_free_block(prev_hdrp, new_size);
+  insert_into_size_class(prev_hdrp, find_index(new_size));
   return (char*)prev_hdrp + WSIZE;
 }
 
