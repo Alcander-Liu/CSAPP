@@ -26,5 +26,5 @@ typedef struct {
 extern team_t team;
 
 extern void TestAllocList(void);
-
+extern void TestFindIndex(void);
 #endif

@@ -1,18 +1,23 @@
-This version is based on the idea of that one described in the CSAPP
+This version is based on the idea described in the CSAPP
 Implementation Details
-0. Possible Maximum allocate size: 32GB
+0. Possible Maximum allocate size: (2^32 - 1) Bytes
 1. Free Block Organization: use implict free list
 2. Coalescing: use immediate coalescing with boundary tags
 3. Placement: first-fit
 4. Splitting: Splitting only if the size of the reminder would equal or exceed the minimum block size
 5. Structure: [1 word padding | 2 words Prologue block | block 0 | ... | block n | 1 word Epilogue block]
-6. Block Structure:
-   - [1 Word Header | Payload | [Optional Padding] | [1 Word Footer only in free block]]
-7. Header Structure:
+6. Basic Size Unit
+   - 1 word =  4 bytes
+   - d-word = 8 bytes
+   - aligment = 8 bytes
+   - chunksize = 4 KB, aligned with page-size
+7. Block
+   - Minimum block size: 8 bytes
+   - Block size is multiple of 8
+   - Allocated Block Structure: [ 1 word header | payload | [optional padding] ]
+   - Free Block Structure: [ 1 word header | empty payload | 1 word footer ]
+8. Header Structure:
    - [31 - 3] bit for size
    - [2] not used
    - [1] prev_alloc   : indicate whether or not previous block is allocated
    - [0] alloc        : indicate whether or current block is allocated
-7. Aligment: 8 bytes
-8. Minimum block size: 8 bytes
-9. extend_heap allocate size which is aiged with page-size

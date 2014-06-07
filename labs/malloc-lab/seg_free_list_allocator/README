@@ -27,5 +27,11 @@ Implementation Details
 11. Analysis
    - malloc is linear to the size of one size class, worse case O(N)
    - free is linear to the size of one size class, if choose ordering by address, otherwise constant time
-   -
 
+
+
+scratch:
+0. when get a free block
+   - Pack Header and Footer for free block
+   - find a sutible size class by index lookup
+   - insert it into the size class

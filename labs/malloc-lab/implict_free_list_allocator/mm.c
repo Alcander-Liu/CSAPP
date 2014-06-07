@@ -1,79 +1,72 @@
 /*
- * mm-naive.c - The fastest, least memory-efficient malloc package.
- *
- * In this naive approach, a block is allocated by simply incrementing
- * the brk pointer.  A block is pure payload. There are no headers or
- * footers.  Blocks are never coalesced or reused. Realloc is
- * implemented directly using mm_malloc and mm_free.
- *
- * NOTE TO STUDENTS: Replace this header comment with your own header
- * comment that gives a high level description of your solution.
- */
+This version is based on the idea described in the CSAPP
+Implementation Details
+0. Possible Maximum allocate size: (2^32 - 1) Bytes
+1. Free Block Organization: use implict free list
+2. Coalescing: use immediate coalescing with boundary tags
+3. Placement: first-fit
+4. Splitting: Splitting only if the size of the reminder would equal or exceed the minimum block size
+5. Structure: [1 word padding | 2 words Prologue block | block 0 | ... | block n | 1 word Epilogue block]
+6. Basic Size Unit
+   - 1 word =  4 bytes
+   - d-word = 8 bytes
+   - aligment = 8 bytes
+   - chunksize = 4 KB, aligned with page-size
+7. Block
+   - Minimum block size: 8 bytes
+   - Block size is multiple of 8
+   - Allocated Block Structure: [ 1 word header | payload | [optional padding] ]
+   - Free Block Structure: [ 1 word header | empty payload | 1 word footer ]
+8. Header Structure:
+   - [31 - 3] bit for size
+   - [2] not used
+   - [1] prev_alloc   : indicate whether or not previous block is allocated
+   - [0] alloc        : indicate whether or current block is allocated
+*/
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
-#include <unistd.h>
-#include <string.h>
 #include <stdint.h>
-#include <execinfo.h>
-
 #include <unistd.h>
-#include <signal.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <errno.h>
 #include "mm.h"
 #include "memlib.h"
 
 // Control Marcos
-
+// #define __HEAP_CHECK__
+// #define __LOG_TO_STDERR__
 #ifdef __LOG_TO_STDERR__
 #define DebugStr(args...)   fprintf(stderr, args);
 #else
 #define DebugStr(args...)
 #endif
-// #define assert(ass) if(!ass) {fprintf(stderr, "line %d\n", __LINE__); abort();}
 
-/*********************************************************
- * NOTE TO STUDENTS: Before you do anything else, please
- * provide your team information in the following struct.
- ********************************************************/
+#ifdef __HEAP_CHECK__
+#include <string.h>
+#include <execinfo.h>
+#include <signal.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <errno.h>
+#endif
+
 team_t team = {
     /* Team name */
-    "xrandom",
+    "CSAPP",
     /* First member's full name */
-    "xrandom",
+    "CSAPP",
     /* First member's email address */
-    "xrandom@ab.com",
+    "CSAPP@CSAPP.com",
     /* Second member's full name (leave blank if none) */
     "",
     /* Second member's email address (leave blank if none) */
     ""
 };
 
-#define NUM_STACK_TRACE    20
-#define ALIGNMENT      8
-#define MIN_BK_SIZE    8
-/* rounds up to the nearest multiple of ALIGNMENT */
-#define ALIGN(size) (((size) + (ALIGNMENT-1)) & ~0x7)
-#define IS_ALIGN(size)      (!(size & (ALIGNMENT - 1)))
-#define IS_ALIGN_WITH_MIN_BK_SIZE(size)        (!(size & (MIN_BK_SIZE-1)))
-// if complie with -m32, sizeof(size_t) = 4
-// if complie with -m64, sizeof(size_t) = 8
-// but in either case, ALIGN(sizeof(size_t)) = 8
-#define SIZE_T_SIZE (ALIGN(sizeof(size_t)))
-#define WSIZE                           4
-#define DSIZE                           8
-#define CHUNKSIZE                       (1 << 12)               // equal the page size 4kb
-#define ALIGN_CHUNKSIZE(size)           (((size) + (CHUNKSIZE - 1)) & ~(CHUNKSIZE-1));
-
-
-// For Debug
 #ifdef __HEAP_CHECK__
-static int writable = 1;
-static void* heap_head = NULL; // points to heap start
-static void* heap_tail = NULL; // points to heap end, one byte after Epilogue header
+typedef void handler_t(int);
+
+// record the allocated block only
 typedef struct HeapStruct {
   char *bk_head;  // block head
   char *bk_tail;  // block tail
@@ -88,9 +81,12 @@ typedef struct HeapStruct {
 static HeapStruct *alloc_list = NULL;
 static HeapStruct *free_list = NULL;
 
+static int writable = 1;
+static void* heap_head = NULL; // points to heap start
+static void* heap_tail = NULL; // points to heap end, one byte after Epilogue header
+
 void add_to_alloc_list(const void *ptr, const size_t pl_size, const size_t bk_size);
 void delete_from_alloc_list(const void *ptr);
-
 HeapStruct* delete_from_list(HeapStruct *list, const void *ptr);
 HeapStruct* search_list(const HeapStruct *list, const void *ptr);
 int addr_is_allocated(const char *addr);
@@ -98,100 +94,30 @@ int addr_is_payload(const char *addr);
 int within_heap(const void *addr);
 void show_heap(void);
 void show_alloc_list(void);
-
-void TestAllocList(void);
+handler_t *Signal(int signum, handler_t *handler);
+void print_stack_trace(int signum);
+void to_hex_str(size_t num, int sep);
+void to_binary_str(size_t num, int sep);
 #endif
 
-
-#ifdef __HEAP_CHECK__
-uint32_t READ_WORD(uint32_t *p) {
-  if (!within_heap(p)) {
-    fprintf(stderr, "%x lies outside heap [%x, %x)\n", p, heap_head, heap_tail);
-    abort();
-  }
-  return *p;
-}
-void WRITE_WORD(uint32_t *p, uint32_t val) {
-  if (!writable) {
-    fprintf(stderr, "current function is not writable\n");
-    abort();
-  }
-
-  if (!within_heap(p)) {
-    fprintf(stderr, "%x lies outside heap [%x, %x)\n", p, heap_head, heap_tail);
-    abort();
-  }
-
-  if (addr_is_payload(p)) {
-    fprintf(stderr, "%x is inside payload\n", p);
-    abort();
-  }
-  *p = val;
-}
-#else
-#define READ_WORD(p)                                (*(uint32_t*)(p))
-#define WRITE_WORD(p, val)                          (*(uint32_t*)(p) = (val))
-#endif
-
-// Macro Operations
-// Allocated Memory Structure
-// [ 1 W Header | Payload | [Optional Padding] | 1 W Footer]
-// hdrp (header pointer) points to the start address of header
-// ftrp (footer pointer) points to the start address of footer
-// pldp (payload pointer) points to the start address of payload
-
-// tested
-#define CURR_ALLOC                                  (1 << 0)
-#define PREV_ALLOC                                  (1 << 1)
-#define SET_CURR_ALLOC_BIT(p)                       (WRITE_WORD(p, READ_WORD(p) | CURR_ALLOC))
-#define CLR_CURR_ALLOC_BIT(p)                       (WRITE_WORD(p, READ_WORD(p) & ~CURR_ALLOC))
-#define SET_PREV_ALLOC_BIT(p)                       (WRITE_WORD(p, READ_WORD(p) | PREV_ALLOC))
-#define CLR_PREV_ALLOC_BIT(p)                       (WRITE_WORD(p, READ_WORD(p) & ~PREV_ALLOC))
-#define PACK(size, alloc)                           ((size) | (alloc))
-#define SIZE_MASK                                   (~(ALIGNMENT - 1))
-#define SET_SIZE(hdrp, size)                        (WRITE_WORD(hdrp, (READ_WORD(hdrp) & (ALIGNMENT-1)) | size))
-#define GET_SIZE(hdrp)                              (READ_WORD(hdrp) & SIZE_MASK)  // get block size from hdrp
-#define GET_ALLOC(hdrp)                             (READ_WORD(hdrp) & 0x1)  // get alloc bit from hdrp
-#define GET_PREV_ALLOC(hdrp)                        (READ_WORD(hdrp) & 0x2)  // get alloc bit of previous block
-#define HDRP_USE_PLDP(pldp)                         ((char*)(pldp) - WSIZE)  // get hdrp using pldp
-#define FTRP_USE_PLDP(pldp)                         ((char*)(pldp) + GET_SIZE(HDRP_USE_PLDP(pldp)) - DSIZE)  // get ftrp using pldp
+#include "mm_macros.h"
 
 static void* heap_listp = NULL;
-
-// Function Declaration
 void pointer_macro_test(void);
 void *extend_heap(size_t size);
 void *coalesce(void *pldp);
-// the input size should be aligned
 void *find_first_fit(size_t asize);
-// the input size should be aligned
 void place_and_split(void *pldp, size_t asize);
-
 void *forward_collect(void *hdrp, size_t *collected_size, size_t target_size);
 void *backward_collect(void *hdrp, size_t target_size);
 void mm_memcpy(void *dst, void *src, size_t num);
-
-typedef void handler_t(int);
-handler_t *Signal(int signum, handler_t *handler);
-void PrintStackTrace(int signum) {
-  void *array[NUM_STACK_TRACE];
-  size_t size;
-  char **strings;
-  size_t i;
-  size = backtrace(array, NUM_STACK_TRACE);
-  strings = backtrace_symbols(array, size);
-  for (i = 1; i < size; ++i) {
-    fprintf(stderr, "%s\n", strings[i]);
-  }
-  free(strings);
-}
 
 /*
  * mm_init - initialize the malloc package.
  */
 int mm_init(void) {
 #ifdef __HEAP_CHECK__
-  Signal(SIGABRT, PrintStackTrace);
+  Signal(SIGABRT, print_stack_trace);
   heap_head = NULL;
   heap_tail = NULL;
   alloc_list = NULL;
@@ -271,7 +197,6 @@ void mm_free(void *ptr) {
 /*
  * mm_realloc - Implemented simply in terms of mm_malloc and mm_free
  */
-//
 void *mm_realloc(void *ptr, size_t size) {
   if (!ptr) return mm_malloc(size);
 
@@ -497,9 +422,7 @@ void *backward_collect(void *hdrp, size_t target_size) {
     size_t next_size = GET_SIZE(next_hdrp);
     WRITE_WORD(hdrp, READ_WORD(hdrp) + next_size); // update header
     next_hdrp = (char*)next_hdrp + next_size;
-    // WRITE_WORD((char*)next_hdrp - WSIZE, READ_WORD(hdrp));
     SET_PREV_ALLOC_BIT(next_hdrp);
-    // CLR_PREV_ALLOC_BIT(next_hdrp);
   }
 }
 
@@ -512,40 +435,9 @@ void mm_memcpy(void *dst, void *src, size_t num) {
   }
 }
 
-void pointer_macro_test() {
-  assert(CURR_ALLOC == 0x1);
-  assert(PREV_ALLOC == 0x2);
-  assert(SIZE_MASK == 0xFFFFFFF8);
 
-  size_t word1 = 0xF0E1B1;
-  size_t word2;
-  assert(READ_WORD(&word1) == word1);
-  WRITE_WORD(&word2, word1);
-  assert(READ_WORD(&word2) == word1);
-
-  size_t header1 = 0x0;
-  SET_CURR_ALLOC_BIT(&header1);
-  assert(header1 == 0x1);
-  CLR_CURR_ALLOC_BIT(&header1);
-  assert(header1 == 0x0);
-
-  SET_PREV_ALLOC_BIT(&header1);
-  assert(header1 == 0x2);
-  CLR_PREV_ALLOC_BIT(&header1);
-  assert(header1 == 0x0);
-
-  header1 = 0x3;
-  SET_SIZE(&header1, 0x300);
-  assert(header1 == 0x303);
-  assert(GET_SIZE(&header1) == 0x300);
-  assert(GET_ALLOC(&header1) == 0x1);
-  assert(GET_PREV_ALLOC(&header1) == 0x2);
-
-  assert(HDRP_USE_PLDP((void*)&header1 + WSIZE) == (void*)&header1);
-  assert(FTRP_USE_PLDP((void*)&header1 + WSIZE) == (void*)((char*)&header1 + 0x300 - WSIZE));
-}
-
-void ToBinaryStr(size_t num, int sep) {
+#ifdef __HEAP_CHECK__
+void to_binary_str(size_t num, int sep) {
   int size = sizeof(num) * 8;
   int i;
   for (i = size - 1; i >= 0; --i) {
@@ -557,7 +449,7 @@ void ToBinaryStr(size_t num, int sep) {
   fprintf(stderr, "\n");
 }
 
-void ToHexStr(size_t num, int sep) {
+void to_hex_str(size_t num, int sep) {
   static size_t mask = (1 << 4) - 1;
   int size = sizeof(num) * 8;
   int i;
@@ -570,7 +462,6 @@ void ToHexStr(size_t num, int sep) {
   fprintf(stderr, "\n");
 }
 
-#ifdef __HEAP_CHECK__
 void add_to_alloc_list(const void *ptr, const size_t pl_size, const size_t bk_size) {
   if (ptr == NULL) return;
   assert(!addr_is_allocated(ptr));
@@ -673,11 +564,11 @@ void show_heap(void) {
   while (GET_SIZE(p) > 0) {
     assert(p < heap_tail);
     DebugStr("hdrp:%x val = ", p);
-    ToHexStr(*(size_t*)p, 1);
+    to_hex_str(*(size_t*)p, 1);
     DebugStr("size = %u, ALLOC = %d, PREV_ALLOC = %d\n", GET_SIZE(p), !!GET_ALLOC(p), !!GET_PREV_ALLOC(p));
     void *ftrp = (char*)p + GET_SIZE(p) - WSIZE;
     DebugStr("ftrp:%x val = ", ftrp);
-    ToHexStr(*(size_t*)ftrp, 1);
+    to_hex_str(*(size_t*)ftrp, 1);
     if (!GET_ALLOC(p)) { // if current block is not allocated, header = footer
       assert(READ_WORD(p) == READ_WORD(ftrp));
     }
@@ -686,6 +577,17 @@ void show_heap(void) {
   }
   DebugStr("heap_tail = %x\n", p);
   DebugStr("-----------------\n");
+}
+
+void show_alloc_list(void) {
+  HeapStruct *alist = alloc_list;
+  DebugStr("\n-------------------\n");
+  while (alist) {
+    DebugStr("Head = %x, Tail = %x, Payload Head = %x, Payload Tail = %x\n",
+      alist->bk_head, alist->bk_tail, alist->pl_head, alist->pl_tail);
+    DebugStr("-------------------\n");
+    alist = alist->next;
+  }
 }
 
 handler_t *Signal(int signum, handler_t *handler) {
@@ -702,26 +604,16 @@ handler_t *Signal(int signum, handler_t *handler) {
   return old_action.sa_handler;
 }
 
-void show_alloc_list(void) {
-  HeapStruct *alist = alloc_list;
-  DebugStr("\n-------------------\n");
-  while (alist) {
-    DebugStr("Head = %x, Tail = %x, Payload Head = %x, Payload Tail = %x\n",
-      alist->bk_head, alist->bk_tail, alist->pl_head, alist->pl_tail);
-    DebugStr("-------------------\n");
-    alist = alist->next;
+void print_stack_trace(int signum) {
+  void *array[NUM_STACK_TRACE];
+  size_t size;
+  char **strings;
+  size_t i;
+  size = backtrace(array, NUM_STACK_TRACE);
+  strings = backtrace_symbols(array, size);
+  for (i = 1; i < size; ++i) {
+    fprintf(stderr, "%s\n", strings[i]);
   }
-}
-
-void TestAllocList(void) {
-  mem_init();
-  mm_init();
-  void *p0 = mm_malloc(23);
-  void *p1 = mm_malloc(33);
-  show_alloc_list();
-  mm_free(p0);
-  mm_free(p1);
-  show_alloc_list();
-  mem_deinit();
+  free(strings);
 }
 #endif

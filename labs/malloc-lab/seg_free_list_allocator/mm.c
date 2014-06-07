@@ -27,13 +27,16 @@
 #include "memlib.h"
 
 // Control Marcos
-
+#define __LIFO_ORDERING__
+#define __LOG_TO_STDERR__
+#define __HEAP_CHECK__
 #ifdef __LOG_TO_STDERR__
 #define DebugStr(args...)   fprintf(stderr, args);
 #else
 #define DebugStr(args...)
 #endif
-// #define assert(ass) if(!ass) {fprintf(stderr, "line %d\n", __LINE__); abort();}
+
+#include "mm_macros.h"
 
 /*********************************************************
  * NOTE TO STUDENTS: Before you do anything else, please
@@ -52,22 +55,19 @@ team_t team = {
     ""
 };
 
-#define NUM_STACK_TRACE    20
-#define ALIGNMENT      8
-#define MIN_BK_SIZE    8
-/* rounds up to the nearest multiple of ALIGNMENT */
-#define ALIGN(size) (((size) + (ALIGNMENT-1)) & ~0x7)
-#define IS_ALIGN(size)      (!(size & (ALIGNMENT - 1)))
-#define IS_ALIGN_WITH_MIN_BK_SIZE(size)        (!(size & (MIN_BK_SIZE-1)))
-// if complie with -m32, sizeof(size_t) = 4
-// if complie with -m64, sizeof(size_t) = 8
-// but in either case, ALIGN(sizeof(size_t)) = 8
-#define SIZE_T_SIZE (ALIGN(sizeof(size_t)))
-#define WSIZE                           4
-#define DSIZE                           8
-#define CHUNKSIZE                       (1 << 12)               // equal the page size 4kb
-#define ALIGN_CHUNKSIZE(size)           (((size) + (CHUNKSIZE - 1)) & ~(CHUNKSIZE-1));
+/*
+#define NUM_STACK_TRACE     20
+#define ALIGNMENT           8
+#define MIN_BK_SIZE         16
+#define WSIZE               4
+#define DSIZE               8
+#define CHUNKSIZE           (1 << 12)  // equal the page size 4kb
 
+#define ALIGN(size)                           (((size) + (ALIGNMENT-1)) & ~0x7)
+#define IS_ALIGN(size)                        (!(size & (ALIGNMENT - 1)))
+#define IS_ALIGN_WITH_MIN_BK_SIZE(size)       (!(size & (MIN_BK_SIZE-1)))
+#define ALIGN_CHUNKSIZE(size)                 (((size) + (CHUNKSIZE - 1)) & ~(CHUNKSIZE-1));
+*/
 
 // For Debug
 #ifdef __HEAP_CHECK__
@@ -86,7 +86,6 @@ typedef struct HeapStruct {
 } HeapStruct;
 
 static HeapStruct *alloc_list = NULL;
-static HeapStruct *free_list = NULL;
 
 void add_to_alloc_list(const void *ptr, const size_t pl_size, const size_t bk_size);
 void delete_from_alloc_list(const void *ptr);
@@ -103,73 +102,87 @@ void TestAllocList(void);
 #endif
 
 
-#ifdef __HEAP_CHECK__
-uint32_t READ_WORD(uint32_t *p) {
-  if (!within_heap(p)) {
-    fprintf(stderr, "%x lies outside heap [%x, %x)\n", p, heap_head, heap_tail);
-    abort();
-  }
-  return *p;
-}
-void WRITE_WORD(uint32_t *p, uint32_t val) {
-  if (!writable) {
-    fprintf(stderr, "current function is not writable\n");
-    abort();
-  }
+// #ifdef __HEAP_CHECK__
+// uint32_t READ_WORD(uint32_t *p) {
+//   if (!within_heap(p)) {
+//     fprintf(stderr, "%x lies outside heap [%x, %x)\n", p, heap_head, heap_tail);
+//     abort();
+//   }
+//   return *p;
+// }
+// void WRITE_WORD(uint32_t *p, uint32_t val) {
+//   if (!writable) {
+//     fprintf(stderr, "current function is not writable\n");
+//     abort();
+//   }
 
-  if (!within_heap(p)) {
-    fprintf(stderr, "%x lies outside heap [%x, %x)\n", p, heap_head, heap_tail);
-    abort();
-  }
+//   if (!within_heap(p)) {
+//     fprintf(stderr, "%x lies outside heap [%x, %x)\n", p, heap_head, heap_tail);
+//     abort();
+//   }
 
-  if (addr_is_payload(p)) {
-    fprintf(stderr, "%x is inside payload\n", p);
-    abort();
-  }
-  *p = val;
-}
-#else
-#define READ_WORD(p)                                (*(uint32_t*)(p))
-#define WRITE_WORD(p, val)                          (*(uint32_t*)(p) = (val))
-#endif
+//   if (addr_is_payload(p)) {
+//     fprintf(stderr, "%x is inside payload\n", p);
+//     abort();
+//   }
+//   *p = val;
+// }
+// #else
+// #define READ_WORD(p)                                (*(uint32_t*)(p))
+// #define WRITE_WORD(p, val)                          (*(uint32_t*)(p) = (val))
+// #endif
 
-// Macro Operations
-// Allocated Memory Structure
-// [ 1 W Header | Payload | [Optional Padding] | 1 W Footer]
-// hdrp (header pointer) points to the start address of header
-// ftrp (footer pointer) points to the start address of footer
-// pldp (payload pointer) points to the start address of payload
+// // tested
+// #define CURR_ALLOC                                  (1 << 0)
+// #define PREV_ALLOC                                  (1 << 1)
+// #define SET_CURR_ALLOC_BIT(p)                       (WRITE_WORD(p, READ_WORD(p) | CURR_ALLOC))
+// #define CLR_CURR_ALLOC_BIT(p)                       (WRITE_WORD(p, READ_WORD(p) & ~CURR_ALLOC))
+// #define SET_PREV_ALLOC_BIT(p)                       (WRITE_WORD(p, READ_WORD(p) | PREV_ALLOC))
+// #define CLR_PREV_ALLOC_BIT(p)                       (WRITE_WORD(p, READ_WORD(p) & ~PREV_ALLOC))
+// #define PACK(size, alloc)                           ((size) | (alloc))
+// #define SIZE_MASK                                   (~(ALIGNMENT - 1))
+// #define SET_SIZE(hdrp, size)                        (WRITE_WORD(hdrp, (READ_WORD(hdrp) & (ALIGNMENT-1)) | size))
+// #define GET_SIZE(hdrp)                              (READ_WORD(hdrp) & SIZE_MASK)  // get block size from hdrp
+// #define GET_ALLOC(hdrp)                             (READ_WORD(hdrp) & 0x1)  // get alloc bit from hdrp
+// #define GET_PREV_ALLOC(hdrp)                        (READ_WORD(hdrp) & 0x2)  // get alloc bit of previous block
+// #define HDRP_USE_PLDP(pldp)                         ((char*)(pldp) - WSIZE)  // get hdrp using pldp
+// #define FTRP_USE_PLDP(pldp)                         ((char*)(pldp) + GET_SIZE(HDRP_USE_PLDP(pldp)) - DSIZE)  // get ftrp using pldp
 
-// tested
-#define CURR_ALLOC                                  (1 << 0)
-#define PREV_ALLOC                                  (1 << 1)
-#define SET_CURR_ALLOC_BIT(p)                       (WRITE_WORD(p, READ_WORD(p) | CURR_ALLOC))
-#define CLR_CURR_ALLOC_BIT(p)                       (WRITE_WORD(p, READ_WORD(p) & ~CURR_ALLOC))
-#define SET_PREV_ALLOC_BIT(p)                       (WRITE_WORD(p, READ_WORD(p) | PREV_ALLOC))
-#define CLR_PREV_ALLOC_BIT(p)                       (WRITE_WORD(p, READ_WORD(p) & ~PREV_ALLOC))
-#define PACK(size, alloc)                           ((size) | (alloc))
-#define SIZE_MASK                                   (~(ALIGNMENT - 1))
-#define SET_SIZE(hdrp, size)                        (WRITE_WORD(hdrp, (READ_WORD(hdrp) & (ALIGNMENT-1)) | size))
-#define GET_SIZE(hdrp)                              (READ_WORD(hdrp) & SIZE_MASK)  // get block size from hdrp
-#define GET_ALLOC(hdrp)                             (READ_WORD(hdrp) & 0x1)  // get alloc bit from hdrp
-#define GET_PREV_ALLOC(hdrp)                        (READ_WORD(hdrp) & 0x2)  // get alloc bit of previous block
-#define HDRP_USE_PLDP(pldp)                         ((char*)(pldp) - WSIZE)  // get hdrp using pldp
-#define FTRP_USE_PLDP(pldp)                         ((char*)(pldp) + GET_SIZE(HDRP_USE_PLDP(pldp)) - DSIZE)  // get ftrp using pldp
+// // not-tested
+// #define PREV_PTR(hdrp)                              ((char*)hdrp + WSIZE)
+// #define NEXT_PTR(hdrp)                              ((char*)hdrp + DSIZE)
+// #define GET_PREV_PTR(hdrp)                          (READ_WORD(PREV_PTR(hdrp)))
+// #define GET_NEXT_PTR(hdrp)                          (READ_WORD(NEXT_PTR(hdrp)))
+// #define SET_PREV_PTR(hdrp, prev_ptr)                (WRITE_WORD(PREV_PTR(hdrp), prev_ptr))
+// #define SET_NEXT_PTR(hdrp, next_ptr)                (WRITE_WORD(NEXT_PTR(hdrp), next_ptr))
 
 static void* heap_listp = NULL;
+static size_t index_array[] = {
+  1 << 4, 1 << 5, 1 << 6, 1 << 7, 1 << 8, 1 << 9, 1 << 10,
+  1 << 11, 1 << 12, 1 << 13, 1 << 14, 1 << 15, 1 << 16, 1 << 17,
+  1 << 18, 1 << 19, 1 << 20, 1 << 21, 1 << 22, 1 << 23, 1 << 24,
+  1 << 25, 1 << 26, 1 << 27, 1 << 28, 1 << 29, 1 << 30, 1 << 31
+};
+static void *segregated_free_list[sizeof(index_array) / sizeof(index_array[0])];
+static const int index_arr_size = sizeof(index_array) / sizeof(index_array[0]);
 
-// Function Declaration
+// Main Functions
 void pointer_macro_test(void);
+int find_index(size_t size);
 void *extend_heap(size_t size);
 void *coalesce(void *pldp);
-// the input size should be aligned
 void *find_first_fit(size_t asize);
-// the input size should be aligned
 void place_and_split(void *pldp, size_t asize);
-
 void *forward_collect(void *hdrp, size_t *collected_size, size_t target_size);
 void *backward_collect(void *hdrp, size_t target_size);
 void mm_memcpy(void *dst, void *src, size_t num);
+
+void init_free_block(void *hdrp, size_t bk_size);
+void insert_into_size_class(void *hdrp, int index);
+
+// Unit Test
+void TestFindIndex(void);
+void TestFreeBlock(void);
 
 typedef void handler_t(int);
 handler_t *Signal(int signum, handler_t *handler);
@@ -190,35 +203,35 @@ void PrintStackTrace(int signum) {
  * mm_init - initialize the malloc package.
  */
 int mm_init(void) {
+
 #ifdef __HEAP_CHECK__
   Signal(SIGABRT, PrintStackTrace);
   heap_head = NULL;
   heap_tail = NULL;
   alloc_list = NULL;
 #endif
-  // Why 4 * WSIZE
-  // 1 WSIZE for 0 padding
-  // 2 WSIZE for Prologue block
-  // 1 WSIZE for Epllogue block
-  if ((heap_listp = mem_sbrk(4 * WSIZE)) == (void*)(-1)) {
+
+  // 1 WSIZE for heap-start padding
+  // 1 WSIZE for heap-end padding
+  if ((heap_listp = mem_sbrk(2 * WSIZE)) == (void*)(-1)) {
     return -1;
   }
 
 #ifdef __HEAP_CHECK__
   heap_head = heap_listp;
-  heap_tail = heap_listp + 4 * WSIZE;
+  heap_tail = heap_listp + 2 * WSIZE;
 #endif
 
-  WRITE_WORD(heap_listp, 0); // 1 WSIZE for 0 padding
-  WRITE_WORD(heap_listp + WSIZE, PACK(DSIZE, PREV_ALLOC | CURR_ALLOC));  // Prologue header
-  WRITE_WORD(heap_listp + 2 * WSIZE, PACK(DSIZE, PREV_ALLOC | CURR_ALLOC)); // Prologue footer
-  WRITE_WORD(heap_listp + 3 * WSIZE, PACK(0, PREV_ALLOC | CURR_ALLOC)); // Epilogue header
-  heap_listp += 3 * WSIZE;
+  WRITE_WORD(heap_listp, PACK(0, CURR_ALLOC));  // heap-start 0 padding
+  WRITE_WORD(heap_listp + WSIZE, PACK(0, CURR_ALLOC));  // heap-end 0 padding
+  heap_listp += WSIZE;
 
+  int i = 0;
+  for (i = 0; i < index_arr_size; ++i) {
+    segregated_free_list[i] = NULL;
+  }
 
-  void* pldp = extend_heap(CHUNKSIZE);
-  if (pldp == NULL) return -1;
-  return 0;
+  return extend_heap(CHUNKSIZE) == NULL ? -1 : 0;
 }
 
 /*
@@ -260,94 +273,27 @@ void mm_free(void *ptr) {
 #ifdef __HEAP_CHECK__
   delete_from_alloc_list(ptr);
 #endif
-  void *hdrp = (char*)ptr - WSIZE;
-  size_t size = GET_SIZE(hdrp);
-  CLR_CURR_ALLOC_BIT(hdrp);
-  WRITE_WORD((char*)hdrp + size - WSIZE, READ_WORD(hdrp)); // footer is same as header
-  CLR_PREV_ALLOC_BIT((char*)hdrp + size); // clear the prev_alloc bit of next block, since current block is free
-  coalesce(ptr); // immediate coalescing
+  assert(NULL);
 }
 
 /*
  * mm_realloc - Implemented simply in terms of mm_malloc and mm_free
  */
-//
-void *mm_realloc(void *ptr, size_t size) {
-  if (!ptr) return mm_malloc(size);
+void *mm_realloc(void *ptr, size_t size) { assert(NULL); }
 
-  void *hdrp = HDRP_USE_PLDP(ptr);
-  size_t old_size = GET_SIZE(hdrp);
-  size_t ori_size = old_size; // original block size
-  size_t target_size = ALIGN(size + WSIZE); // realloc target size
-
-  backward_collect(hdrp, target_size);
-
-  old_size = GET_SIZE(hdrp); // update the block size pointed by hdrp
-  if (target_size <= old_size) {
-
-#ifdef __HEAP_CHECK__
-    delete_from_alloc_list(ptr);
-#endif
-
-    place_and_split(ptr, target_size);
-
-#ifdef __HEAP_CHECK__
-    add_to_alloc_list(ptr, size, target_size);
-#endif
-
-    return ptr;
-  }
-
-  size_t collected_size = 0;
-  void *new_hdrp = forward_collect(hdrp, &collected_size, target_size);
-  if (target_size <= collected_size + old_size) {
-
-#ifdef __HEAP_CHECK__
-    delete_from_alloc_list(ptr);
-#endif
-
-    size_t new_size = collected_size + old_size;
-    mm_memcpy((char*)new_hdrp + WSIZE, ptr, ori_size - WSIZE); // copy payload
-    size_t left_size = new_size - target_size;
-    if (left_size && IS_ALIGN_WITH_MIN_BK_SIZE(left_size)) {
-      void *split_hdrp = (char*)new_hdrp + target_size;
-      WRITE_WORD(split_hdrp, PACK(left_size, PREV_ALLOC));
-      WRITE_WORD((char*)split_hdrp + left_size - WSIZE, READ_WORD(split_hdrp));
-      CLR_PREV_ALLOC_BIT((char*)split_hdrp + left_size);
-      new_size = target_size;
+int find_index(size_t size) {
+  int low = 0, high = index_arr_size;
+  int ret = -1;
+  int mid;
+  while (low < high) {
+    mid = (high + low) >> 1;
+    if (size < index_array[mid]) {
+      high = mid;
+    } else {
+      low = mid + 1;
     }
-    SET_SIZE(new_hdrp, new_size);
-    SET_CURR_ALLOC_BIT(new_hdrp);
-    SET_PREV_ALLOC_BIT((char*)new_hdrp + new_size);
-
-#ifdef __HEAP_CHECK__
-    add_to_alloc_list(new_hdrp + WSIZE, size, target_size);
-#endif
-
-    return new_hdrp + WSIZE;
   }
-
-  void *new_pldp = find_first_fit(target_size);
-  if (new_pldp) {
-    place_and_split(new_pldp, target_size);
-    mm_memcpy(new_pldp, ptr, ori_size - WSIZE);
-    mm_free(ptr);
-
-#ifdef __HEAP_CHECK__
-    add_to_alloc_list(new_pldp, size, target_size);
-#endif
-    return new_pldp;
-  }
-
-  new_pldp = extend_heap(target_size);
-  if (!new_pldp) return NULL;
-  place_and_split(new_pldp, target_size);
-  mm_memcpy(new_pldp, ptr, ori_size - WSIZE);
-  mm_free(ptr);
-#ifdef __HEAP_CHECK__
-  add_to_alloc_list(new_pldp, size, target_size);
-#endif
-  return new_pldp;
+  return low - 1;
 }
 
 void *extend_heap(size_t size) {
@@ -357,22 +303,21 @@ void *extend_heap(size_t size) {
 
 #ifdef __HEAP_CHECK__
   assert(hdrp == heap_tail);
+  assert(!addr_is_allocated(hdrp));
+  assert(!addr_is_allocated((char*)hdrp + asize));
   heap_tail += asize;
 #endif
 
-  hdrp = (char*)hdrp - WSIZE; // points to the old Epliogue header
+  hdrp = (char*)hdrp - WSIZE; // points to heap-end 0 padding
+  init_free_block(hdrp, asize); // pack header and footer
+  insert_into_size_class(hdrp, find_index(asize));
 
-#ifdef __HEAP_CHECK__
-  assert(!addr_is_allocated(hdrp));
-  assert(!addr_is_allocated((char*)hdrp + asize));
-#endif
-
-  WRITE_WORD(hdrp, PACK(asize, GET_PREV_ALLOC(hdrp))); // set new header
-  WRITE_WORD((char*)hdrp + asize - WSIZE, READ_WORD(hdrp)); // footer is same as header
 #ifdef __HEAP_CHECK__
   assert((hdrp + asize) == ((char*)heap_tail - WSIZE));
 #endif
-  WRITE_WORD(hdrp + asize, PACK(0, CURR_ALLOC)); // write new epilogue block
+
+  WRITE_WORD(hdrp + asize, PACK(0, CURR_ALLOC)); // write new heap-end 0 padding
+
   return coalesce((char*)hdrp + WSIZE);
 }
 
@@ -510,6 +455,45 @@ void mm_memcpy(void *dst, void *src, size_t num) {
   for (i = 0; i < num; ++i) {
     *ddst++ = *ssrc++;
   }
+}
+
+void init_free_block(void *hdrp, size_t bk_size) {
+  WRITE_WORD(hdrp, PACK(bk_size,0));
+  WRITE_WORD((char*)hdrp + bk_size - WSIZE, READ_WORD(hdrp));
+  SET_PREV_PTR(hdrp, NULL);
+  SET_NEXT_PTR(hdrp, NULL);
+}
+
+void insert_into_size_class(void *hdrp, int index) {
+#ifdef __LIFO_ORDERING__
+  SET_NEXT_PTR(hdrp, segregated_free_list[index]); // hdrp->next = head
+  SET_PREV_PTR(hdrp, NULL); // hdrp->prev = NULL
+  if (segregated_free_list[index]) { // if (head)
+    SET_PREV_PTR(segregated_free_list[index], hdrp); // head->prev = hdrp
+  }
+  segregated_free_list[index] = hdrp; // head = hdrp
+#else // address ordering
+  void *head = segregated_free_list[index];
+  if (!head) {
+    segregated_free_list[index] = hdrp;
+  } else if (hdrp < head) {
+    SET_NEXT_PTR(hdrp, head); // hdrp->next = head
+    SET_PREV_PTR(hdrp, NULL); // hdrp->prev = NULL
+    SET_PREV_PTR(head, hdrp); // head->prev = hdrp
+    segregated_free_list[index] = hdrp; // head = hdrp
+  } else {
+    // while (head->next && head->next < hdrp), loop invariant: head < hdrp
+    while (GET_NEXT_PTR(head) && GET_NEXT_PTR(head) < hdrp) {
+      head = GET_NEXT_PTR(head);
+    }
+    SET_NEXT_PTR(hdrp, GET_NEXT_PTR(head)); // hdrp->next = head->next
+    SET_NEXT_PTR(head, hdrp);               // head->next = hdrp
+    SET_PREV_PTR(hdrp, head);               // hdrp->prev = head
+    if (GET_NEXT_PTR(hdrp)) {               // if (hdrp->next)
+      SET_PREV_PTR(GET_NEXT_PTR(hdrp), hdrp); // hdrp->next->prev = hdrp
+    }
+  }
+#endif
 }
 
 void pointer_macro_test() {
@@ -725,3 +709,12 @@ void TestAllocList(void) {
   mem_deinit();
 }
 #endif
+
+
+// For Unit-Test
+void TestFindIndex(void) {
+  int i;
+  for (i = 0; i < index_arr_size; ++i) {
+    assert(find_index(index_array[i]) == i);
+  }
+}
