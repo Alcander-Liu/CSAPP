@@ -6,7 +6,7 @@
 #define MIN_BK_SIZE         16
 #define WSIZE               4
 #define DSIZE               8
-#define CHUNKSIZE           (MIN_BK_SIZE)
+#define CHUNKSIZE           128
 
 #define ALIGN(size)                           (((size) + (ALIGNMENT-1)) & ~(ALIGNMENT-1))
 #define ALIGN_WITH_MIN_BK_SIZE(size)          (((size) + (MIN_BK_SIZE-1)) & ~(MIN_BK_SIZE-1))

@@ -40,7 +40,6 @@ Implementation Details
 
 #define __LIFO_ORDERING__
 // #define __USE_FIRST_FIT__
-// Control Marcos
 // #define __HEAP_CHECK__
 // #define __LOG_TO_STDERR__
 
@@ -128,7 +127,8 @@ int index_arr_size = sizeof(index_array) / sizeof(index_array[0]);
 void *extend_heap(size_t size);
 void *coalesce(void *hdrp);
 void *find_fit(size_t asize);
-void place_and_split(void *hdrp, size_t asize);
+void *place_and_split(void *hdrp, size_t asize);
+void *realloc_place_and_split(void *hdrp, size_t asize);
 
 void *forward_collect(void *hdrp, size_t *collected_size, size_t target_size);
 void *backward_collect(void *hdrp, size_t target_size);
@@ -194,11 +194,10 @@ void *mm_malloc(size_t size) {
     assert(!addr_is_payload(head));
 #endif
 
-    place_and_split(head, asize);
+    head = place_and_split(head, asize);
     ret = (char*)head + WSIZE;
   } else {
     void *heap_end_padding = (char*)heap_tail - WSIZE;
-    assert(GET_ALLOC(heap_end_padding));
     if (!GET_PREV_ALLOC(heap_end_padding)) {
       void *footer = (char*)heap_end_padding - WSIZE;
       size_t end_bk_size = GET_SIZE(footer);
@@ -206,7 +205,7 @@ void *mm_malloc(size_t size) {
     } else {
       head = extend_heap(asize);
     }
-    place_and_split(head, asize);
+    head = place_and_split(head, asize);
     ret = (char*)head + WSIZE;
   }
   // } else if ((head = extend_heap(asize))) {
@@ -249,7 +248,80 @@ void mm_free(void *ptr) {
 /*
  * mm_realloc - Implemented simply in terms of mm_malloc and mm_free
  */
-void *mm_realloc(void *ptr, size_t size) { assert(NULL); }
+void *mm_realloc(void *ptr, size_t size) {
+  if (!ptr) return mm_malloc(size);
+
+  void *hdrp = HDRP_USE_PLDP(ptr);
+  size_t old_size = GET_SIZE(hdrp);
+  size_t ori_size = old_size;
+  size_t target_size = ALIGN_WITH_MIN_BK_SIZE(size + WSIZE);
+  backward_collect(hdrp, target_size);
+  old_size = GET_SIZE(hdrp);
+  if (target_size <= old_size) {
+
+#ifdef __HEAP_CHECK__
+    delete_from_alloc_list(ptr);
+#endif
+
+    hdrp = realloc_place_and_split(hdrp, target_size);
+
+#ifdef __HEAP_CHECK__
+    add_to_alloc_list(ptr, size, target_size);
+#endif
+
+    return (char*)hdrp + WSIZE;
+  }
+
+  /*
+  size_t collected_size = 0;
+  void *new_hdrp = forward_collect(hdrp, &collected_size, target_size);
+  if (target_size <= collected_size + old_size) {
+#ifdef __HEAP_CHECK__
+    delete_from_alloc_list(ptr);
+#endif
+
+    size_t new_size = collected_size + old_size;
+    mm_memcpy((char*)new_hdrp + WSIZE, ptr, ori_size - WSIZE);
+    size_t left_size = new_size = target_size;
+    if (left_size && IS_ALIGN_WITH_MIN_BK_SIZE(left_size)) {
+      void *split_hdrp = (char*)new_hdrp + target_size;
+      WRITE_WORD(split_hdrp, PACK(left_size, PREV_ALLOC));
+      WRITE_WORD((char*)split_hdrp + left_size - WSIZE, READ_WORD(split_hdrp));
+      CLR_PREV_ALLOC_BIT((char*)split_hdrp + left_size);
+      new_size = target_size;
+      insert_into_size_class(split_hdrp, find_index(left_size));
+    }
+
+    SET_SIZE(new_hdrp, new_size);
+    SET_CURR_ALLOC_BIT(new_hdrp);
+    SET_PREV_ALLOC_BIT((char*)new_hdrp + new_size);
+#ifdef __HEAP_CHECK__
+    add_to_alloc_list(new_hdrp + WSIZE, size, target_size);
+#endif
+    return (char*)new_hdrp + WSIZE;
+  }*/
+
+  void *new_hdrp = find_fit(target_size);
+  if (new_hdrp) {
+    new_hdrp = place_and_split(new_hdrp, target_size);
+    mm_memcpy((char*)new_hdrp + WSIZE, ptr, ori_size - WSIZE);
+    mm_free(ptr);
+#ifdef __HEAP_CHECK__
+    add_to_alloc_list((char*)new_hdrp + WSIZE, size, target_size);
+#endif
+    return (char*)new_hdrp + WSIZE;
+  }
+
+  new_hdrp = extend_heap(target_size);
+  if (!new_hdrp) return NULL;
+  new_hdrp = place_and_split(new_hdrp, target_size);
+  mm_memcpy((char*)new_hdrp + WSIZE, ptr, ori_size - WSIZE);
+  mm_free(ptr);
+#ifdef __HEAP_CHECK__
+  add_to_alloc_list((char*)new_hdrp + WSIZE, size, target_size);
+#endif
+  return (char*)new_hdrp + WSIZE;
+}
 
 int find_index(size_t size) {
   int low = 0, high = index_arr_size;
@@ -378,12 +450,49 @@ void *find_fit(size_t asize) {
   return NULL;
 }
 
-void place_and_split(void *hdrp, size_t asize) {
+void *place_and_split(void *hdrp, size_t asize) {
   size_t bk_size = GET_SIZE(hdrp);
 #ifdef __HEAP_CHECK__
   assert(bk_size >= asize);
 #endif
   delete_from_size_class(hdrp, find_index(bk_size));
+  size_t left_size = bk_size - asize;
+  if (left_size >= bk_size) {
+    if (left_size && IS_ALIGN_WITH_MIN_BK_SIZE(left_size)) {
+      SET_SIZE(hdrp, asize);
+      SET_CURR_ALLOC_BIT(hdrp);
+      void *new_free_hdrp = (char*)hdrp + asize;
+      WRITE_WORD(new_free_hdrp, PREV_ALLOC);
+      init_free_block(new_free_hdrp, left_size);
+      insert_into_size_class(new_free_hdrp, find_index(left_size));
+    } else {
+      SET_CURR_ALLOC_BIT(hdrp);
+      SET_PREV_ALLOC_BIT((char*)hdrp + bk_size);
+    }
+    return hdrp;
+  } else {
+    if (left_size && IS_ALIGN_WITH_MIN_BK_SIZE(left_size)) {
+      SET_SIZE(hdrp, left_size);
+      init_free_block(hdrp, left_size);
+      insert_into_size_class(hdrp, find_index(left_size));
+
+      void *new_free_hdrp = (char*)hdrp + left_size;
+      WRITE_WORD(new_free_hdrp, PACK(asize, 1));
+      SET_PREV_ALLOC_BIT((char*)new_free_hdrp + asize);
+      return new_free_hdrp;
+    } else {
+      SET_CURR_ALLOC_BIT(hdrp);
+      SET_PREV_ALLOC_BIT((char*)hdrp + bk_size);
+      return hdrp;
+    }
+  }
+}
+
+void *realloc_place_and_split(void *hdrp, size_t asize) {
+  size_t bk_size = GET_SIZE(hdrp);
+#ifdef __HEAP_CHECK__
+  assert(bk_size >= asize);
+#endif
   size_t left_size = bk_size - asize;
   if (left_size && IS_ALIGN_WITH_MIN_BK_SIZE(left_size)) {
     SET_SIZE(hdrp, asize);
@@ -396,6 +505,7 @@ void place_and_split(void *hdrp, size_t asize) {
     SET_CURR_ALLOC_BIT(hdrp);
     SET_PREV_ALLOC_BIT((char*)hdrp + bk_size);
   }
+  return hdrp;
 }
 
 void *forward_collect(void *hdrp, size_t *collected_size, size_t target_size) {
@@ -404,9 +514,14 @@ void *forward_collect(void *hdrp, size_t *collected_size, size_t target_size) {
   *collected_size = GET_SIZE((char*)hdrp - WSIZE);
   void *ret = (char*)hdrp - *collected_size;
   void *ftrp = (char*)hdrp - WSIZE;
+
+  delete_from_size_class(ret, find_index(GET_SIZE(ret)));
+
   while (*collected_size + old_size < target_size && !GET_PREV_ALLOC(ret)) {
     size_t next_size = GET_SIZE((char*)ret - WSIZE);
     ret = (char*)ret - next_size;
+    delete_from_size_class(ret, find_index(next_size));
+
     WRITE_WORD(ret, READ_WORD(ret) + *collected_size);
     *collected_size = GET_SIZE(ret);
     WRITE_WORD(ftrp, READ_WORD(ret));
@@ -418,11 +533,10 @@ void *backward_collect(void *hdrp, size_t target_size) {
   void *next_hdrp = (char*)hdrp + GET_SIZE(hdrp);
   while (GET_SIZE(hdrp) < target_size && !GET_ALLOC(next_hdrp)) {
     size_t next_size = GET_SIZE(next_hdrp);
+    delete_from_size_class(next_hdrp, find_index(next_size));
     WRITE_WORD(hdrp, READ_WORD(hdrp) + next_size); // update header
     next_hdrp = (char*)next_hdrp + next_size;
-    // WRITE_WORD((char*)next_hdrp - WSIZE, READ_WORD(hdrp));
     SET_PREV_ALLOC_BIT(next_hdrp);
-    // CLR_PREV_ALLOC_BIT(next_hdrp);
   }
 }
 
