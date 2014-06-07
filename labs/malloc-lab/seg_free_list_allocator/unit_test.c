@@ -5,7 +5,7 @@
 #include <check.h>
 #include "mm.h"
 #include "mm_macros.h"
-
+#define __LIFO_ORDERING__
 START_TEST (test_macros) {
   ck_assert(ALIGNMENT == 8);
   ck_assert(MIN_BK_SIZE == 16);
@@ -120,6 +120,76 @@ START_TEST(insert_into_size_class_test) {
 }
 END_TEST
 
+extern void delete_from_size_class(void *hdrp, int index);
+START_TEST(delete_from_size_class_middle_node) {
+  int i = 0;
+  for (; i < index_arr_size; ++i) {
+    segregated_free_list[i] = NULL;
+  }
+
+  size_t arr[16];
+  init_free_block(&arr[0], 4 * WSIZE);
+  init_free_block(&arr[4], 4 * WSIZE);
+  init_free_block(&arr[8], 4 * WSIZE);
+  init_free_block(&arr[12], 4 * WSIZE);
+  insert_into_size_class(&arr[0], find_index(4 * WSIZE));
+  insert_into_size_class(&arr[4], find_index(4 * WSIZE));
+  insert_into_size_class(&arr[8], find_index(4 * WSIZE));
+  insert_into_size_class(&arr[12], find_index(4 * WSIZE));
+
+#ifdef __LIFO_ORDERING__
+  void *ordering[] = {arr + 12, arr + 8, arr + 0};
+#else
+  void *ordering[] = {arr + 0, arr + 8, arr + 12};
+#endif
+  ck_assert(find_index(4 * WSIZE) == 0);
+  delete_from_size_class(arr + 4, find_index(4 * WSIZE));
+  ck_assert(!is_in_size_class(arr + 4));
+  void *head = segregated_free_list[find_index(4 * WSIZE)];
+  for (i = 0; i < 12; i += 4) {
+    ck_assert(head == ordering[i / 4]);
+    head = GET_NEXT_PTR(head);
+  }
+  ck_assert(i == 12);
+  ck_assert(head == NULL);
+}
+END_TEST
+
+START_TEST(delete_from_size_class_first_node) {
+  int i = 0;
+  for (; i < index_arr_size; ++i) {
+    segregated_free_list[i] = NULL;
+  }
+
+  size_t arr[16];
+  init_free_block(&arr[0], 4 * WSIZE);
+  init_free_block(&arr[4], 4 * WSIZE);
+  init_free_block(&arr[8], 4 * WSIZE);
+  init_free_block(&arr[12], 4 * WSIZE);
+  insert_into_size_class(&arr[0], find_index(4 * WSIZE));
+  insert_into_size_class(&arr[4], find_index(4 * WSIZE));
+  insert_into_size_class(&arr[8], find_index(4 * WSIZE));
+  insert_into_size_class(&arr[12], find_index(4 * WSIZE));
+
+#ifdef __LIFO_ORDERING__
+  void *ordering[] = {arr + 8, arr + 4, arr + 0};
+  void *del_head = arr + 12;
+#else
+  void *ordering[] = {arr + 4, arr + 8, arr + 12};
+  void *del_head = arr + 0;
+#endif
+  ck_assert(find_index(4 * WSIZE) == 0);
+  delete_from_size_class(del_head, find_index(4 * WSIZE));
+  ck_assert(!is_in_size_class(del_head));
+  void *head = segregated_free_list[find_index(4 * WSIZE)];
+  for (i = 0; i < 12; i += 4) {
+    ck_assert(head == ordering[i / 4]);
+    head = GET_NEXT_PTR(head);
+  }
+  ck_assert(i == 12);
+  ck_assert(head == NULL);
+}
+END_TEST
 
 Suite *test_suit(void) {
   Suite *s = suite_create("test");
@@ -128,6 +198,8 @@ Suite *test_suit(void) {
   tcase_add_test(tc_core, find_index_test);
   tcase_add_test(tc_core, init_free_block_test);
   tcase_add_test(tc_core, insert_into_size_class_test);
+  tcase_add_test(tc_core, delete_from_size_class_middle_node);
+  tcase_add_test(tc_core, delete_from_size_class_first_node);
   suite_add_tcase(s, tc_core);
   return s;
 }

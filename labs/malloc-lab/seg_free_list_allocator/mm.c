@@ -15,7 +15,8 @@ Implementation Details
 8. Header Structure:
    - [31 - 3] bit for size
    - [2] not used
-   - [0] alloc        : indicate whether or current block is allocated
+   - [1] pre_alloc    : indicate whether or not previous block is allocated
+   - [0] alloc        : indicate whether or not current block is allocated
 9. Size classes: power of 2
    - [16 ~ 31]
    - [32 ~ 63]
@@ -40,7 +41,7 @@ Implementation Details
 // Control Marcos
 // #define __HEAP_CHECK__
 // #define __LOG_TO_STDERR__
-// #define __LIFO_ORDERING__
+#define __LIFO_ORDERING__
 #ifdef __LOG_TO_STDERR__
 #define DebugStr(args...)   fprintf(stderr, args);
 #else
@@ -131,19 +132,21 @@ void mm_memcpy(void *dst, void *src, size_t num);
 int find_index(size_t size);
 void init_free_block(void *hdrp, size_t bk_size);
 void insert_into_size_class(void *hdrp, int index);
+void delete_from_size_class(void *hdrp, int index);
+int is_in_size_class(void *hdrp, int index);
 void print_list(void *hdrp);
 
 /*
  * mm_init - initialize the malloc package.
  */
 int mm_init(void) {
+
 #ifdef __HEAP_CHECK__
   Signal(SIGABRT, print_stack_trace);
   heap_head = NULL;
   heap_tail = NULL;
   alloc_list = NULL;
 #endif
-
   // 1 WSIZE for heap-start padding
   // 1 WSIZE for heap-end padding
   if ((heap_listp = mem_sbrk(2 * WSIZE)) == (void*)(-1)) {
@@ -158,7 +161,6 @@ int mm_init(void) {
   WRITE_WORD(heap_listp, PACK(0, CURR_ALLOC));  // heap-start 0 padding
   WRITE_WORD(heap_listp + WSIZE, PACK(0, CURR_ALLOC));  // heap-end 0 padding
   heap_listp += WSIZE;
-
   int i = 0;
   for (i = 0; i < index_arr_size; ++i) {
     segregated_free_list[i] = NULL;
@@ -249,8 +251,7 @@ void *extend_heap(size_t size) {
   assert((hdrp + asize) == ((char*)heap_tail - WSIZE));
 #endif
 
-  WRITE_WORD(hdrp + asize, PACK(0, CURR_ALLOC)); // write new heap-end 0 padding
-
+  WRITE_WORD((char*)hdrp + asize, PACK(0, 1)); // write new heap-end padding
   return coalesce((char*)hdrp + WSIZE);
 }
 
@@ -391,10 +392,11 @@ void mm_memcpy(void *dst, void *src, size_t num) {
 }
 
 void init_free_block(void *hdrp, size_t bk_size) {
-  WRITE_WORD(hdrp, PACK(bk_size,0));
-  WRITE_WORD((char*)hdrp + bk_size - WSIZE, READ_WORD(hdrp));
+  WRITE_WORD(hdrp, PACK(bk_size, GET_PREV_ALLOC(hdrp))); // write new header and keep prev_alloc bit
+  WRITE_WORD((char*)hdrp + bk_size - WSIZE, READ_WORD(hdrp)); // write footer
   SET_PREV_PTR(hdrp, NULL);
   SET_NEXT_PTR(hdrp, NULL);
+  CLR_PREV_ALLOC_BIT((char*)hdrp + bk_size); // clear the prev_alloc bit in the next block
 }
 
 void insert_into_size_class(void *hdrp, int index) {
@@ -427,6 +429,46 @@ void insert_into_size_class(void *hdrp, int index) {
     }
   }
 #endif
+}
+
+// O(1)
+void delete_from_size_class(void *hdrp, int index) {
+  void *head = segregated_free_list[index];
+
+#ifdef __HEAP_CHECK__
+  assert(index >= 0 && index < index_arr_size);
+  assert(hdrp);
+  assert(head);
+  assert(is_in_size_class(hdrp, index));
+  int i = 0;
+  for (i = 0; i < index_arr_size; ++i) {
+    if (i == index) continue;
+    assert(!is_in_size_class(hdrp, index));
+  }
+#endif
+
+  void *prev_ptr = GET_PREV_PTR(hdrp);
+  void *next_ptr = GET_NEXT_PTR(hdrp);
+  if (!prev_ptr) { // if current node is the firt node
+    segregated_free_list[index] = next_ptr; // head = curr_node->next
+  } else {
+    SET_NEXT_PTR(prev_ptr, next_ptr); // curr->prev->next = curr_node->next
+  }
+
+  if (next_ptr) { // if curr_node->next != NULL
+    SET_PREV_PTR(next_ptr, prev_ptr); // curr_node->next->prev = curr_node->prev
+  }
+
+  SET_PREV_PTR(hdrp, NULL); // curr->next = NULL
+  SET_NEXT_PTR(hdrp, NULL); // curr->prev = NULL
+}
+
+int is_in_size_class(void *hdrp, int index) {
+  void *head = segregated_free_list[index];
+  while (head && head != hdrp) {
+    head = GET_NEXT_PTR(head);
+  }
+  return head == hdrp ? 1 : 0;
 }
 
 void print_list(void *hdrp) {
@@ -619,5 +661,4 @@ void print_stack_trace(int signum) {
   }
   free(strings);
 }
-
 #endif
