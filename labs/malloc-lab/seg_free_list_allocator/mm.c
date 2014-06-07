@@ -125,6 +125,7 @@ void *segregated_free_list[sizeof(index_array) / sizeof(index_array[0])];
 int index_arr_size = sizeof(index_array) / sizeof(index_array[0]);
 
 void *extend_heap(size_t size);
+void *realloc_extend_heap(size_t size);
 void *coalesce(void *hdrp);
 void *find_fit(size_t asize);
 void *place_and_split(void *hdrp, size_t asize);
@@ -312,7 +313,8 @@ void *mm_realloc(void *ptr, size_t size) {
     return (char*)new_hdrp + WSIZE;
   }
 
-  new_hdrp = extend_heap(target_size);
+  // new_hdrp = extend_heap(target_size);
+  new_hdrp = realloc_extend_heap(target_size);
   if (!new_hdrp) return NULL;
   new_hdrp = place_and_split(new_hdrp, target_size);
   mm_memcpy((char*)new_hdrp + WSIZE, ptr, ori_size - WSIZE);
@@ -341,6 +343,31 @@ int find_index(size_t size) {
 void *extend_heap(size_t size) {
   char *hdrp = NULL;
   size_t asize = ALIGN_CHUNKSIZE(size);
+  if ((void*)(hdrp = mem_sbrk(asize)) == (void*)(-1)) return NULL;
+
+#ifdef __HEAP_CHECK__
+  assert(hdrp == heap_tail);
+  assert(!addr_is_allocated(hdrp));
+  assert(!addr_is_allocated((char*)hdrp + asize));
+#endif
+
+  heap_tail += asize;
+
+  hdrp = (char*)hdrp - WSIZE; // points to heap-end 0 padding
+  init_free_block(hdrp, asize); // pack header and footer
+  insert_into_size_class(hdrp, find_index(asize));
+
+#ifdef __HEAP_CHECK__
+  assert((hdrp + asize) == ((char*)heap_tail - WSIZE));
+#endif
+
+  WRITE_WORD((char*)hdrp + asize, PACK(0, 1)); // write new heap-end padding
+  return coalesce((char*)hdrp);
+}
+
+void *realloc_extend_heap(size_t size) {
+  char *hdrp = NULL;
+  size_t asize = ALIGN_RECHUNKSIZE(size);
   if ((void*)(hdrp = mem_sbrk(asize)) == (void*)(-1)) return NULL;
 
 #ifdef __HEAP_CHECK__

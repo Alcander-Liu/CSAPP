@@ -7,10 +7,12 @@
 #define WSIZE               4
 #define DSIZE               8
 #define CHUNKSIZE           160
+#define REALLOC_CHUNKSIZE   528
 
 #define ALIGN(size)                           (((size) + (ALIGNMENT-1)) & ~(ALIGNMENT-1))
 #define ALIGN_WITH_MIN_BK_SIZE(size)          (((size) + (MIN_BK_SIZE-1)) & ~(MIN_BK_SIZE-1))
 #define ALIGN_CHUNKSIZE(size)                 (((size) + (CHUNKSIZE - 1)) & ~(CHUNKSIZE-1))
+#define ALIGN_RECHUNKSIZE(size)               (((size) + (REALLOC_CHUNKSIZE - 1)) & ~(REALLOC_CHUNKSIZE-1))
 #define IS_ALIGN(size)                        (!(size & (ALIGNMENT - 1)))
 #define IS_ALIGN_WITH_MIN_BK_SIZE(size)       (!(size & (MIN_BK_SIZE-1)))
 #define IS_ALIGN_WITH_CHUNKSIZE(size)         (!(size & (CHUNKSIZE-1)))
