@@ -156,6 +156,8 @@ int mm_init(void) {
 #endif
   // 1 WSIZE for heap-start padding
   // 1 WSIZE for heap-end padding
+  // TODO: we cannot have global array
+  mem_sbrk(16 * WSIZE);
   if ((heap_listp = mem_sbrk(2 * WSIZE)) == (void*)(-1)) {
     return -1;
   }
