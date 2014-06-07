@@ -40,6 +40,7 @@ Implementation Details
 // Control Marcos
 // #define __HEAP_CHECK__
 // #define __LOG_TO_STDERR__
+// #define __LIFO_ORDERING__
 #ifdef __LOG_TO_STDERR__
 #define DebugStr(args...)   fprintf(stderr, args);
 #else
@@ -108,18 +109,16 @@ void to_binary_str(size_t num, int sep);
 #include "mm_macros.h"
 
 static void* heap_listp = NULL;
-static size_t index_array[] = {
+size_t index_array[] = {
   1 << 4, 1 << 5, 1 << 6, 1 << 7, 1 << 8, 1 << 9, 1 << 10,
   1 << 11, 1 << 12, 1 << 13, 1 << 14, 1 << 15, 1 << 16, 1 << 17,
   1 << 18, 1 << 19, 1 << 20, 1 << 21, 1 << 22, 1 << 23, 1 << 24,
   1 << 25, 1 << 26, 1 << 27, 1 << 28, 1 << 29, 1 << 30, 1 << 31
 };
 
-static void *segregated_free_list[sizeof(index_array) / sizeof(index_array[0])];
-static const int index_arr_size = sizeof(index_array) / sizeof(index_array[0]);
+void *segregated_free_list[sizeof(index_array) / sizeof(index_array[0])];
+int index_arr_size = sizeof(index_array) / sizeof(index_array[0]);
 
-void pointer_macro_test(void);
-int find_index(size_t size);
 void *extend_heap(size_t size);
 void *coalesce(void *pldp);
 void *find_first_fit(size_t asize);
@@ -127,8 +126,12 @@ void place_and_split(void *pldp, size_t asize);
 void *forward_collect(void *hdrp, size_t *collected_size, size_t target_size);
 void *backward_collect(void *hdrp, size_t target_size);
 void mm_memcpy(void *dst, void *src, size_t num);
+
+// helper functions
+int find_index(size_t size);
 void init_free_block(void *hdrp, size_t bk_size);
 void insert_into_size_class(void *hdrp, int index);
+void print_list(void *hdrp);
 
 /*
  * mm_init - initialize the malloc package.
@@ -426,39 +429,17 @@ void insert_into_size_class(void *hdrp, int index) {
 #endif
 }
 
-void pointer_macro_test() {
-  assert(CURR_ALLOC == 0x1);
-  assert(PREV_ALLOC == 0x2);
-  assert(SIZE_MASK == 0xFFFFFFF8);
-
-  size_t word1 = 0xF0E1B1;
-  size_t word2;
-  assert(READ_WORD(&word1) == word1);
-  WRITE_WORD(&word2, word1);
-  assert(READ_WORD(&word2) == word1);
-
-  size_t header1 = 0x0;
-  SET_CURR_ALLOC_BIT(&header1);
-  assert(header1 == 0x1);
-  CLR_CURR_ALLOC_BIT(&header1);
-  assert(header1 == 0x0);
-
-  SET_PREV_ALLOC_BIT(&header1);
-  assert(header1 == 0x2);
-  CLR_PREV_ALLOC_BIT(&header1);
-  assert(header1 == 0x0);
-
-  header1 = 0x3;
-  SET_SIZE(&header1, 0x300);
-  assert(header1 == 0x303);
-  assert(GET_SIZE(&header1) == 0x300);
-  assert(GET_ALLOC(&header1) == 0x1);
-  assert(GET_PREV_ALLOC(&header1) == 0x2);
-
-  assert(HDRP_USE_PLDP((void*)&header1 + WSIZE) == (void*)&header1);
-  assert(FTRP_USE_PLDP((void*)&header1 + WSIZE) == (void*)((char*)&header1 + 0x300 - WSIZE));
+void print_list(void *hdrp) {
+  fprintf(stderr, "\n\n");
+  while (hdrp) {
+    fprintf(stderr, "-------------------\n");
+    fprintf(stderr, "Block Header: %x, Size = %u, ALLOC Bit = %d\n", hdrp, GET_SIZE(hdrp), GET_ALLOC(hdrp));
+    fprintf(stderr, "Previous Ptr: %x, Next Ptr: %x\n", GET_PREV_PTR(hdrp), GET_NEXT_PTR(hdrp));
+    hdrp = GET_NEXT_PTR(hdrp);
+  }
 }
 
+#ifdef __HEAP_CHECK__
 void to_binary_str(size_t num, int sep) {
   int size = sizeof(num) * 8;
   int i;
@@ -484,7 +465,6 @@ void to_hex_str(size_t num, int sep) {
   fprintf(stderr, "\n");
 }
 
-#ifdef __HEAP_CHECK__
 void add_to_alloc_list(const void *ptr, const size_t pl_size, const size_t bk_size) {
   if (ptr == NULL) return;
   assert(!addr_is_allocated(ptr));

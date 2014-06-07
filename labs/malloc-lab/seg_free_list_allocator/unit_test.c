@@ -62,20 +62,79 @@ START_TEST (test_macros) {
   SET_NEXT_PTR(&val_arr[0], 0x12345);
   ck_assert(GET_PREV_PTR(&val_arr[0]) == 0xFFFFFFF8);
   ck_assert(GET_NEXT_PTR(&val_arr[0]) == 0x12345);
+
 }
 END_TEST
 
-Suite *macros_test_suit(void) {
-  Suite *s = suite_create("macros_test");
+
+extern int index_arr_size;
+extern size_t index_array[];
+extern int find_index(size_t size);
+extern int index_arr_size;
+START_TEST(find_index_test) {
+  int i = 0;
+  for (; i < index_arr_size; ++i) {
+    ck_assert(find_index(index_array[i] + 3) == i); }
+}
+END_TEST
+
+extern void init_free_block(void *hdrp, size_t bk_size);
+START_TEST(init_free_block_test) {
+  size_t bk[4];
+  init_free_block(bk, 4 * WSIZE);
+  ck_assert(bk[0] == PACK(4 * WSIZE, 0));
+  ck_assert(bk[3] == PACK(4 * WSIZE, 0));
+}
+END_TEST
+
+extern void *segregated_free_list[];
+START_TEST(insert_into_size_class_test) {
+  int i = 0;
+  for (; i < index_arr_size; ++i) {
+    segregated_free_list[i] = NULL;
+  }
+
+  size_t arr[16];
+  init_free_block(&arr[0], 4 * WSIZE);
+  init_free_block(&arr[4], 4 * WSIZE);
+  init_free_block(&arr[8], 4 * WSIZE);
+  init_free_block(&arr[12], 4 * WSIZE);
+  insert_into_size_class(&arr[0], find_index(4 * WSIZE));
+  insert_into_size_class(&arr[4], find_index(4 * WSIZE));
+  insert_into_size_class(&arr[8], find_index(4 * WSIZE));
+  insert_into_size_class(&arr[12], find_index(4 * WSIZE));
+
+#ifdef __LIFO_ORDERING__
+  void *ordering[] = {arr + 12, arr + 8, arr + 4, arr + 0};
+#else
+  void *ordering[] = {arr + 0, arr + 4, arr + 8, arr + 12};
+#endif
+
+  ck_assert(find_index(4 * WSIZE) == 0);
+  void *head = segregated_free_list[find_index(4 * WSIZE)];
+  for (i = 0; i < 16; i += 4) {
+    ck_assert(head == ordering[i / 4]);
+    head = GET_NEXT_PTR(head);
+  }
+  ck_assert(i == 16);
+}
+END_TEST
+
+
+Suite *test_suit(void) {
+  Suite *s = suite_create("test");
   TCase *tc_core = tcase_create("Core");
   tcase_add_test(tc_core, test_macros);
+  tcase_add_test(tc_core, find_index_test);
+  tcase_add_test(tc_core, init_free_block_test);
+  tcase_add_test(tc_core, insert_into_size_class_test);
   suite_add_tcase(s, tc_core);
   return s;
 }
 
 int main() {
   int num_failed;
-  Suite *s = macros_test_suit();
+  Suite *s = test_suit();
   SRunner *sr = srunner_create(s);
   srunner_run_all(sr, CK_NORMAL);
   num_failed = srunner_ntests_failed(sr);
