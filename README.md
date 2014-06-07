@@ -24,4 +24,5 @@ Computer Systems A Programmer's Perspective (深入理解计算机系统)
          * M = 61, N = 67 (not yet)
     5. sh-lab (version: July 28, 2003)
       * 80 points: 16 trace files x 5 points each
-    6. malloc-lab (version: Nov 30, 2011)
+    6. malloc-lab (version: Nov 30, 2010)
+      * Performance: 97/100
