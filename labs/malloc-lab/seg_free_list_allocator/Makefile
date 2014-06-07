@@ -1,9 +1,6 @@
 #
 # Students' Makefile for the Malloc Lab
 #
-TEAM = bovik
-VERSION = 1
-HANDINDIR = /afs/cs.cmu.edu/academic/class/15213-f01/malloclab/handin
 
 CC = gcc
 CFLAGS = -Wall -O2 -m32 -pg -rdynamic
