@@ -41,6 +41,7 @@ Implementation Details
 // Control Marcos
 // #define __HEAP_CHECK__
 // #define __LOG_TO_STDERR__
+#define __LIFO_ORDERING__
 #ifdef __LOG_TO_STDERR__
 #define DebugStr(args...)   fprintf(stderr, args);
 #else

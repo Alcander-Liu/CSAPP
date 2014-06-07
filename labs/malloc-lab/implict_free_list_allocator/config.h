@@ -22,17 +22,17 @@
  * traces.
  */
 #define DEFAULT_TRACEFILES \
-  "amptjp-bal.rep",\
-  "cccp-bal.rep",\
-  "cp-decl-bal.rep",\
-  "expr-bal.rep",\
-  "coalescing-bal.rep",\
-  "random-bal.rep",\
-  "random2-bal.rep",\
-  "binary-bal.rep",\
-  "binary2-bal.rep",\
-  "realloc-bal.rep",\
-  "realloc2-bal.rep"
+  "amptjp-bal.rep",\              // 0
+  "cccp-bal.rep",\                // 1
+  "cp-decl-bal.rep",\             // 2
+  "expr-bal.rep",\                // 3
+  "coalescing-bal.rep",\          // 4
+  "random-bal.rep",\              // 5
+  "random2-bal.rep",\             // 6
+  "binary-bal.rep",\              // 7
+  "binary2-bal.rep"               // 8
+  // "realloc-bal.rep",\
+  // "realloc2-bal.rep"
 // #define DEFAULT_TRACEFILES \
   // "amptjp-bal.rep",\
   // "cccp-bal.rep",\
