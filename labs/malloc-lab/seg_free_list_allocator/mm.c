@@ -38,10 +38,12 @@ Implementation Details
 #include "mm.h"
 #include "memlib.h"
 
+#define __LIFO_ORDERING__
+// #define __USE_FIRST_FIT__
 // Control Marcos
 // #define __HEAP_CHECK__
 // #define __LOG_TO_STDERR__
-#define __LIFO_ORDERING__
+
 #ifdef __LOG_TO_STDERR__
 #define DebugStr(args...)   fprintf(stderr, args);
 #else
@@ -89,8 +91,6 @@ static HeapStruct *alloc_list = NULL;
 static HeapStruct *free_list = NULL;
 
 static int writable = 1;
-static void* heap_head = NULL; // points to heap start
-static void* heap_tail = NULL; // points to heap end, one byte after Epilogue header
 
 void add_to_alloc_list(const void *ptr, const size_t pl_size, const size_t bk_size);
 void delete_from_alloc_list(const void *ptr);
@@ -105,7 +105,12 @@ handler_t *Signal(int signum, handler_t *handler);
 void print_stack_trace(int signum);
 void to_hex_str(size_t num, int sep);
 void to_binary_str(size_t num, int sep);
+size_t heap_size(void);
+int segregated_free_list_valid(void);
 #endif
+
+static void* heap_head = NULL; // points to heap start
+static void* heap_tail = NULL; // points to heap end, one byte after Epilogue header
 
 #include "mm_macros.h"
 
@@ -122,7 +127,7 @@ int index_arr_size = sizeof(index_array) / sizeof(index_array[0]);
 
 void *extend_heap(size_t size);
 void *coalesce(void *hdrp);
-void *find_first_fit(size_t asize);
+void *find_fit(size_t asize);
 void place_and_split(void *hdrp, size_t asize);
 
 void *forward_collect(void *hdrp, size_t *collected_size, size_t target_size);
@@ -154,19 +159,19 @@ int mm_init(void) {
     return -1;
   }
 
-#ifdef __HEAP_CHECK__
   heap_head = heap_listp;
   heap_tail = heap_listp + 2 * WSIZE;
-#endif
 
   WRITE_WORD(heap_listp, PACK(0, CURR_ALLOC));  // heap-start 0 padding
-  WRITE_WORD(heap_listp + WSIZE, PACK(0, CURR_ALLOC));  // heap-end 0 padding
-  heap_listp += WSIZE;
+  WRITE_WORD(heap_listp + WSIZE, PACK(0, PREV_ALLOC | CURR_ALLOC));  // heap-end 0 padding
   int i = 0;
   for (i = 0; i < index_arr_size; ++i) {
     segregated_free_list[i] = NULL;
   }
 
+#ifdef __HEAP_CHECK__
+  assert(heap_size() == 2 * WSIZE);
+#endif
   return extend_heap(CHUNKSIZE) == NULL ? -1 : 0;
 }
 
@@ -180,19 +185,43 @@ void *mm_malloc(size_t size) {
 
   void *ret = NULL;
   size_t asize = ALIGN_WITH_MIN_BK_SIZE(size + WSIZE);
-  void *head = find_first_fit(asize);
+  void *head = find_fit(asize);
   if (head) {
+
 #ifdef __HEAP_CHECK__
     assert(within_heap(head));
     assert(!addr_is_allocated(head));
     assert(!addr_is_payload(head));
 #endif
+
     place_and_split(head, asize);
     ret = (char*)head + WSIZE;
-  } else if ((head = extend_heap(asize))) {
+  } else {
+    void *heap_end_padding = (char*)heap_tail - WSIZE;
+    assert(GET_ALLOC(heap_end_padding));
+    if (!GET_PREV_ALLOC(heap_end_padding)) {
+      void *footer = (char*)heap_end_padding - WSIZE;
+      size_t end_bk_size = GET_SIZE(footer);
+      head = extend_heap(asize - end_bk_size);
+    } else {
+      head = extend_heap(asize);
+    }
     place_and_split(head, asize);
     ret = (char*)head + WSIZE;
   }
+  // } else if ((head = extend_heap(asize))) {
+  //   place_and_split(head, asize);
+  //   ret = (char*)head + WSIZE;
+  // }
+
+  // } else {
+  //   if (!GET_PREV_ALLOC((char*)heap_tail - WSIZE)) {
+  //     DebugStr("prev_alloc is 0\n");
+  //     head = extend_heap(asize - GET_SIZE((char*)heap_tail - DSIZE));
+  //   }
+  //   place_and_split(head, asize);
+  //   return (char*)head + WSIZE;
+  // }
 
 #ifdef __HEAP_CHECK__
   assert(ret);
@@ -214,6 +243,7 @@ void mm_free(void *ptr) {
   size_t size = GET_SIZE(head);
   init_free_block(head, size);
   insert_into_size_class(head, find_index(size));
+  coalesce(head);
 }
 
 /*
@@ -245,8 +275,9 @@ void *extend_heap(size_t size) {
   assert(hdrp == heap_tail);
   assert(!addr_is_allocated(hdrp));
   assert(!addr_is_allocated((char*)hdrp + asize));
-  heap_tail += asize;
 #endif
+
+  heap_tail += asize;
 
   hdrp = (char*)hdrp - WSIZE; // points to heap-end 0 padding
   init_free_block(hdrp, asize); // pack header and footer
@@ -264,7 +295,6 @@ void *coalesce(void *hdrp) {
   size_t size = GET_SIZE(hdrp);
   size_t prev_alloc = GET_PREV_ALLOC(hdrp); // read current header to get the privous block allocate bit
   size_t next_alloc = GET_ALLOC((char*)hdrp + size); // read next block header to get its allocate bit
-
   // previous and next are both allocated
   if (prev_alloc && next_alloc) {
     return hdrp;
@@ -273,10 +303,9 @@ void *coalesce(void *hdrp) {
   // previous is free but next is allocated
   if (!prev_alloc && next_alloc) {
     size_t prev_bk_size = GET_SIZE((char*)hdrp - WSIZE);
-    void *prev_hdrp = (char*)hdrp - GET_SIZE((char*)hdrp - WSIZE); // get previous block header pointer
+    void *prev_hdrp = (char*)hdrp - prev_bk_size;
     delete_from_size_class(prev_hdrp, find_index(prev_bk_size)); // delete previous block from free list
     delete_from_size_class(hdrp, find_index(size)); // delete current block from free list
-
     size_t new_size = prev_bk_size + size;
     init_free_block(prev_hdrp, new_size);
     insert_into_size_class(prev_hdrp, find_index(new_size));
@@ -312,7 +341,8 @@ void *coalesce(void *hdrp) {
 }
 
 // linear search
-void *find_first_fit(size_t asize) {
+void *find_fit(size_t asize) {
+#ifdef __USE_FIRST_FIT__
   int index = find_index(asize);
   while (index < index_arr_size) {
     void *head = segregated_free_list[index];
@@ -324,6 +354,27 @@ void *find_first_fit(size_t asize) {
     }
     ++index;
   }
+#else
+  int index = find_index(asize);
+  void *ret = NULL;
+  size_t min_size = (1 << 31) - 1;
+  while (index < index_arr_size) {
+    void *head = segregated_free_list[index];
+    while (head) {
+      size_t h_size = GET_SIZE(head);
+      if (h_size >= asize && h_size < min_size) {
+        ret = head;
+        min_size = h_size;
+      }
+      head = GET_NEXT_PTR(head);
+    }
+    if (ret == NULL) {
+      ++index;
+    } else {
+      return ret;
+    }
+  }
+#endif
   return NULL;
 }
 
@@ -433,10 +484,11 @@ void delete_from_size_class(void *hdrp, int index) {
   assert(hdrp);
   assert(head);
   assert(is_in_size_class(hdrp, index));
+  assert(hdrp);
   int i = 0;
   for (i = 0; i < index_arr_size; ++i) {
     if (i == index) continue;
-    assert(!is_in_size_class(hdrp, index));
+    assert(!is_in_size_class(hdrp, i));
   }
 #endif
 
@@ -457,6 +509,9 @@ void delete_from_size_class(void *hdrp, int index) {
 }
 
 int is_in_size_class(void *hdrp, int index) {
+#ifdef __HEAP_CHECK__
+  assert(hdrp);
+#endif
   void *head = segregated_free_list[index];
   while (head && head != hdrp) {
     head = GET_NEXT_PTR(head);
@@ -654,4 +709,23 @@ void print_stack_trace(int signum) {
   }
   free(strings);
 }
+
+size_t heap_size(void) {
+  return (char*)heap_tail - (char*)heap_head;
+}
+
+int segregated_free_list_valid(void) {
+  int i = 0;
+  for (i = 0; i < index_arr_size; ++i) {
+    size_t low = index_array[i];
+    size_t high = low * 2 - 1;
+    void *head = segregated_free_list[i];
+    while (head) {
+      size_t size = GET_SIZE(head);
+      assert(size >= low && size < high);
+      head = GET_NEXT_PTR(head);
+    }
+  }
+}
+
 #endif

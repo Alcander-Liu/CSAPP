@@ -6,7 +6,7 @@
 #define MIN_BK_SIZE         8
 #define WSIZE               4
 #define DSIZE               8
-#define CHUNKSIZE           (1 << 12)  // equal the page size 4kb
+#define CHUNKSIZE           (MIN_BK_SIZE)
 
 #define ALIGN(size)                           (((size) + (ALIGNMENT-1)) & ~0x7)
 #define IS_ALIGN(size)                        (!(size & (ALIGNMENT - 1)))

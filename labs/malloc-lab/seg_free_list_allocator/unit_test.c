@@ -290,12 +290,65 @@ Suite *test_suit(void) {
   return s;
 }
 
+extern size_t heap_size(void);
+void mm_utilization_test(void) {
+  mem_init();
+  mm_init();
+  fprintf(stderr, "mm_malloc %u,", 4095);
+  void *p1 = mm_malloc(4095);
+  fprintf(stderr, "heap size: %u\n\n", heap_size());
+
+  fprintf(stderr, "mm_malloc %u,", 4095);
+  void *p2 = mm_malloc(4095);
+  fprintf(stderr, " heap size: %u\n\n", heap_size());
+
+  fprintf(stderr, "mm_free %u,", 4095);
+  mm_free(p1);
+  fprintf(stderr, "heap size: %u\n\n", heap_size());
+
+  fprintf(stderr, "mm_free %u,", 4095);
+  mm_free(p2);
+  fprintf(stderr, "heap size: %u\n\n", heap_size());
+
+  fprintf(stderr, "mm_malloc %u,", 8190);
+  p1 = mm_malloc(8190);
+  fprintf(stderr, "heap size: %u\n\n", heap_size());
+
+  fprintf(stderr, "mm_free %u,", 8190);
+  mm_free(p1);
+  fprintf(stderr, "heap size: %u\n\n", heap_size());
+
+  fprintf(stderr, "mm_malloc %u,", 4095);
+  p1 = mm_malloc(4095);
+  fprintf(stderr, "heap size: %u\n\n", heap_size());
+
+  fprintf(stderr, "mm_malloc %u,", 4095);
+  p2 = mm_malloc(4095);
+  fprintf(stderr, "heap size: %u\n\n", heap_size());
+
+  fprintf(stderr, "mm_malloc %u,", 8190);
+  p1 = mm_malloc(8190);
+  fprintf(stderr, "heap size: %u\n\n", heap_size());
+
+  fprintf(stderr, "mm_free %u,", 8190);
+  mm_free(p1);
+  fprintf(stderr, "heap size: %u\n\n", heap_size());
+
+  fprintf(stderr, "mm_malloc %u,", 8190);
+  p1 = mm_malloc(8190);
+  fprintf(stderr, "heap size: %u\n\n", heap_size());
+
+
+  mem_deinit();
+}
+
 int main() {
-  int num_failed;
-  Suite *s = test_suit();
-  SRunner *sr = srunner_create(s);
-  srunner_run_all(sr, CK_NORMAL);
-  num_failed = srunner_ntests_failed(sr);
-  srunner_free(sr);
+  // int num_failed;
+  // Suite *s = test_suit();
+  // SRunner *sr = srunner_create(s);
+  // srunner_run_all(sr, CK_NORMAL);
+  // num_failed = srunner_ntests_failed(sr);
+  // srunner_free(sr);
+  mm_utilization_test();
   return 0;
 }
