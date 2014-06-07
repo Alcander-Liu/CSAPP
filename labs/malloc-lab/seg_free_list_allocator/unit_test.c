@@ -12,17 +12,21 @@ START_TEST (test_macros) {
   ck_assert(DSIZE == 8);
   ck_assert(CHUNKSIZE == 4096);
 
-  ck_assert_int_eq(ALIGN(11) % 8, 0);
+  ck_assert(ALIGN(13) == 16);
   ck_assert(IS_ALIGN(ALIGN(13)));
-  ck_assert_int_eq(ALIGN_CHUNKSIZE(34) % (CHUNKSIZE), 0);
-  ck_assert(IS_ALIGN_WITH_MIN_BK_SIZE(16));
-  ck_assert(!IS_ALIGN_WITH_MIN_BK_SIZE(33));
+  ck_assert(!IS_ALIGN(7));
+  ck_assert(ALIGN_WITH_MIN_BK_SIZE(15) == 16);
+  ck_assert(ALIGN_WITH_MIN_BK_SIZE(17) == 32);
+  ck_assert(IS_ALIGN_WITH_MIN_BK_SIZE(ALIGN_WITH_MIN_BK_SIZE(15)));
+  ck_assert(!IS_ALIGN_WITH_MIN_BK_SIZE(15));
+  ck_assert(ALIGN_CHUNKSIZE(CHUNKSIZE + 1) == 2 * CHUNKSIZE);
+  ck_assert(IS_ALIGN_WITH_CHUNKSIZE(2*CHUNKSIZE));
+  ck_assert(!IS_ALIGN_WITH_CHUNKSIZE(CHUNKSIZE-1));
 
   size_t val = 32;
   ck_assert(READ_WORD(&val) == val);
   WRITE_WORD(&val, 34);
   ck_assert(READ_WORD(&val) == 34);
-
 
   val = 0;
   SET_CURR_ALLOC_BIT(&val);
@@ -209,7 +213,7 @@ START_TEST(coalesce_test_head) {
   insert_into_size_class(&arr[9], find_index(4 * WSIZE));
   insert_into_size_class(&arr[13], find_index(4 * WSIZE));
 
-  void *head = (char*)coalesce((arr + 1) + 1) - WSIZE;
+  void *head = (char*)coalesce((arr + 1));
   ck_assert(head == arr + 1);
   ck_assert(!is_in_size_class(arr + 1, find_index(4 * WSIZE)));
   ck_assert(!is_in_size_class(arr + 5, find_index(4 * WSIZE)));
@@ -235,7 +239,7 @@ START_TEST(coalesce_test_middle) {
   insert_into_size_class(&arr[9], find_index(4 * WSIZE));
   insert_into_size_class(&arr[13], find_index(4 * WSIZE));
 
-  void *head = (char*)coalesce((arr + 5) + 1) - WSIZE;
+  void *head = (char*)coalesce((arr + 5));
   ck_assert(head == arr + 1);
   ck_assert(!is_in_size_class(arr + 1, find_index(4 * WSIZE)));
   ck_assert(!is_in_size_class(arr + 5, find_index(4 * WSIZE)));
@@ -262,7 +266,7 @@ START_TEST(coalesce_test_tail) {
   insert_into_size_class(&arr[9], find_index(4 * WSIZE));
   insert_into_size_class(&arr[13], find_index(4 * WSIZE));
 
-  void *head = (char*)coalesce((arr + 13) + 1) - WSIZE;
+  void *head = (char*)coalesce((arr + 13));
   ck_assert(head == arr + 9);
   ck_assert(!is_in_size_class(arr + 9, find_index(4 * WSIZE)));
   ck_assert(!is_in_size_class(arr + 13, find_index(4 * WSIZE)));

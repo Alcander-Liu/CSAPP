@@ -8,10 +8,12 @@
 #define DSIZE               8
 #define CHUNKSIZE           (1 << 12)  // equal the page size 4kb
 
-#define ALIGN(size)                           (((size) + (ALIGNMENT-1)) & ~0x7)
+#define ALIGN(size)                           (((size) + (ALIGNMENT-1)) & ~(ALIGNMENT-1))
+#define ALIGN_WITH_MIN_BK_SIZE(size)          (((size) + (MIN_BK_SIZE-1)) & ~(MIN_BK_SIZE-1))
+#define ALIGN_CHUNKSIZE(size)                 (((size) + (CHUNKSIZE - 1)) & ~(CHUNKSIZE-1))
 #define IS_ALIGN(size)                        (!(size & (ALIGNMENT - 1)))
 #define IS_ALIGN_WITH_MIN_BK_SIZE(size)       (!(size & (MIN_BK_SIZE-1)))
-#define ALIGN_CHUNKSIZE(size)                 (((size) + (CHUNKSIZE - 1)) & ~(CHUNKSIZE-1))
+#define IS_ALIGN_WITH_CHUNKSIZE(size)         (!(size & (CHUNKSIZE-1)))
 
 #ifdef __HEAP_CHECK__
 uint32_t READ_WORD(uint32_t *p) {

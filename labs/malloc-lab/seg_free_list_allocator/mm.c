@@ -120,9 +120,10 @@ void *segregated_free_list[sizeof(index_array) / sizeof(index_array[0])];
 int index_arr_size = sizeof(index_array) / sizeof(index_array[0]);
 
 void *extend_heap(size_t size);
-void *coalesce(void *pldp);
+void *coalesce(void *hdrp);
 void *find_first_fit(size_t asize);
-void place_and_split(void *pldp, size_t asize);
+void place_and_split(void *hdrp, size_t asize);
+
 void *forward_collect(void *hdrp, size_t *collected_size, size_t target_size);
 void *backward_collect(void *hdrp, size_t target_size);
 void mm_memcpy(void *dst, void *src, size_t num);
@@ -177,26 +178,26 @@ void *mm_malloc(size_t size) {
   if (!size) return NULL;
 
   void *ret = NULL;
-  size_t asize = ALIGN(size + WSIZE);
-
-  void *pldp = find_first_fit(asize);
-  if (pldp) {
-
+  size_t asize = ALIGN_WITH_MIN_BK_SIZE(size + WSIZE);
+  void *head = find_first_fit(asize);
+  if (head) {
 #ifdef __HEAP_CHECK__
-    assert(within_heap(pldp));
-    assert(!addr_is_allocated(pldp)); // lies with free space
-    assert(!addr_is_payload(pldp));
+    assert(within_heap(head));
+    assert(!addr_is_allocated(head));
+    assert(!addr_is_payload(head));
 #endif
-    place_and_split(pldp, asize);
-    ret = pldp;
-  } else if ((pldp = extend_heap(asize))) {
-    place_and_split(pldp, asize);
-    ret = pldp;
+    place_and_split(head, asize);
+    ret = (char*)head + WSIZE;
+  } else if ((head = extend_heap(asize))) {
+    place_and_split(head, asize);
+    ret = (char*)head + WSIZE;
   }
 
 #ifdef __HEAP_CHECK__
+  assert(ret);
   add_to_alloc_list(ret, size, asize);
 #endif
+
   return ret;
 }
 
@@ -205,9 +206,13 @@ void *mm_malloc(size_t size) {
  */
 void mm_free(void *ptr) {
 #ifdef __HEAP_CHECK__
+  assert(ptr);
   delete_from_alloc_list(ptr);
 #endif
-  assert(NULL);
+  void *head = (char*)ptr - WSIZE;
+  size_t size = GET_SIZE(head);
+  init_free_block(head, size);
+  insert_into_size_class(head, find_index(size));
 }
 
 /*
@@ -251,18 +256,17 @@ void *extend_heap(size_t size) {
 #endif
 
   WRITE_WORD((char*)hdrp + asize, PACK(0, 1)); // write new heap-end padding
-  return coalesce((char*)hdrp + WSIZE);
+  return coalesce((char*)hdrp);
 }
 
-void *coalesce(void *pldp) {
-  void *hdrp = HDRP_USE_PLDP(pldp);
+void *coalesce(void *hdrp) {
   size_t size = GET_SIZE(hdrp);
   size_t prev_alloc = GET_PREV_ALLOC(hdrp); // read current header to get the privous block allocate bit
   size_t next_alloc = GET_ALLOC((char*)hdrp + size); // read next block header to get its allocate bit
 
   // previous and next are both allocated
   if (prev_alloc && next_alloc) {
-    return pldp;
+    return hdrp;
   }
 
   // previous is free but next is allocated
@@ -275,7 +279,7 @@ void *coalesce(void *pldp) {
     size_t new_size = prev_bk_size + size;
     init_free_block(prev_hdrp, new_size);
     insert_into_size_class(prev_hdrp, find_index(new_size));
-    return (char*)prev_hdrp + WSIZE;
+    return (char*)prev_hdrp;
   }
 
   // next is free but previous is allocated
@@ -288,7 +292,7 @@ void *coalesce(void *pldp) {
     size_t new_size = next_bk_size + size;
     init_free_block(hdrp, new_size);
     insert_into_size_class(hdrp, find_index(new_size));
-    return pldp;
+    return hdrp;
   }
 
   // previous and next are both free
@@ -303,68 +307,43 @@ void *coalesce(void *pldp) {
   size_t new_size = prev_bk_size + next_bk_size + size;
   init_free_block(prev_hdrp, new_size);
   insert_into_size_class(prev_hdrp, find_index(new_size));
-  return (char*)prev_hdrp + WSIZE;
+  return (char*)prev_hdrp;
 }
 
 // linear search
 void *find_first_fit(size_t asize) {
-#ifdef __HEAP_CHECK__
-  writable = 0;
-#endif
-  void *hdrp = heap_listp;
-  size_t b_size;
-  do {
-    b_size = GET_SIZE(hdrp);
-    if (asize <= b_size && !GET_ALLOC(hdrp)) {
-
-#ifdef __HEAP_CHECK__
-      writable = 1;
-#endif
-
-      return (char*)hdrp + WSIZE;
+  int index = find_index(asize);
+  while (index < index_arr_size) {
+    void *head = segregated_free_list[index];
+    while (head) {
+      if (GET_SIZE(head) >= asize) {
+        return head;
+      }
+      head = GET_NEXT_PTR(head);
     }
-    hdrp = (char*)hdrp + b_size;
-  } while (b_size > 0);
-
-#ifdef __HEAP_CHECK__
-      writable = 1;
-#endif
-
+    ++index;
+  }
   return NULL;
 }
 
-void place_and_split(void *pldp, size_t asize) {
-
-  void *hdrp = HDRP_USE_PLDP(pldp);
-  size_t b_size = GET_SIZE(hdrp);
-
+void place_and_split(void *hdrp, size_t asize) {
+  size_t bk_size = GET_SIZE(hdrp);
 #ifdef __HEAP_CHECK__
-  assert(b_size >= asize);
+  assert(bk_size >= asize);
 #endif
-
-  size_t left_size = b_size - asize;
-  // split
-  if (left_size && IS_ALIGN_WITH_MIN_BK_SIZE(left_size)) { // reminder > 0 and is multiple of minimum blockasize
+  delete_from_size_class(hdrp, find_index(bk_size));
+  size_t left_size = bk_size - asize;
+  if (left_size && IS_ALIGN_WITH_MIN_BK_SIZE(left_size)) {
+    SET_SIZE(hdrp, asize);
+    SET_CURR_ALLOC_BIT(hdrp);
     void *new_free_hdrp = (char*)hdrp + asize;
-
-#ifdef __HEAP_CHECK__
-    assert(!addr_is_allocated(new_free_hdrp));
-#endif
-    WRITE_WORD(new_free_hdrp, PACK(left_size, 0));
-    WRITE_WORD((char*)new_free_hdrp + left_size - WSIZE, READ_WORD(new_free_hdrp));
-    b_size = asize;
+    WRITE_WORD(new_free_hdrp, PREV_ALLOC);
+    init_free_block(new_free_hdrp, left_size);
+    insert_into_size_class(new_free_hdrp, find_index(left_size));
+  } else {
+    SET_CURR_ALLOC_BIT(hdrp);
+    SET_PREV_ALLOC_BIT((char*)hdrp + bk_size);
   }
-  SET_SIZE(hdrp, b_size);
-  SET_CURR_ALLOC_BIT(hdrp);
-  void *next_hdrp = (char*)hdrp + b_size;
-  SET_PREV_ALLOC_BIT(next_hdrp);
-
-  if (!GET_ALLOC(next_hdrp)) {
-    SET_PREV_ALLOC_BIT((char*)next_hdrp + GET_SIZE(next_hdrp) - WSIZE);
-  }
-// #ifdef __HEAP_CHECK__
-  // SET_PREV_ALLOC_BIT((char*)next_hdrp + GET_SIZE(next_hdrp) - WSIZE);
-// #endif __HEAP_CHECK__
 }
 
 void *forward_collect(void *hdrp, size_t *collected_size, size_t target_size) {
