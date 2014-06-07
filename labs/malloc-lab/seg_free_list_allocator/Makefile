@@ -3,7 +3,7 @@
 #
 
 CC = gcc
-CFLAGS = -Wall -O2 -m32 -pg -rdynamic
+CFLAGS = -Wall -O2 -m32 -pg -rdynamic -L/usr/local/lib/ -I/usr/local/include
 
 OBJS = mdriver.o mm.o memlib.o fsecs.o fcyc.o clock.o ftimer.o
 
@@ -11,7 +11,7 @@ mdriver: $(OBJS)
 	$(CC) $(CFLAGS) -o mdriver $(OBJS)
 
 test: unit_test.o memlib.o mm.o
-	$(CC) $(CFLAGS) -o unit_test unit_test.o memlib.o mm.o
+	$(CC) $(CFLAGS) -o unit_test unit_test.o memlib.o mm.o -lcheck
 
 mdriver.o: mdriver.c fsecs.h fcyc.h clock.h memlib.h config.h mm.h
 memlib.o: memlib.c memlib.h
