@@ -27,8 +27,3 @@ Implementation Details
 11. Analysis
    - malloc is linear to the size of one size class, worse case O(N)
    - free is linear to the size of one size class, if choose ordering by address, otherwise constant time
-
-
-// TODO:
-// 1. Remove global array, add array inthe first place of heap
-// 2. use inline instead of MACRO
