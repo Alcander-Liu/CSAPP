@@ -25,4 +25,4 @@ Computer Systems A Programmer's Perspective (深入理解计算机系统)
     5. sh-lab (version: July 28, 2003)
       * Evaluate: 80/80
     6. malloc-lab (version: Nov 30, 2010)
-      * Performance: 97/100
+      * Performance: 96/100
