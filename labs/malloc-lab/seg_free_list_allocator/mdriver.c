@@ -1,5 +1,4 @@
-/*
- * mdriver.c - CS:APP Malloc Lab Driver
+/* * mdriver.c - CS:APP Malloc Lab Driver
  *
  * Uses a collection of trace files to tests a malloc/free/realloc
  * implementation in mm.c.
@@ -15,12 +14,10 @@
 #include <assert.h>
 #include <float.h>
 #include <time.h>
-
 #include "mm.h"
 #include "memlib.h"
 #include "fsecs.h"
 #include "config.h"
-
 /**********************
  * Constants and macros
  **********************/

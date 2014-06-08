@@ -13,7 +13,6 @@
  * default tracefiles. You can override it at runtime with the -t flag.
  */
 #define TRACEDIR "./traces/"
-
 /*
  * This is the list of default tracefiles in TRACEDIR that the driver
  * will use for testing. Modify this if you want to add or delete
@@ -33,7 +32,6 @@
   "binary2-bal.rep",\
   "realloc-bal.rep",\
   "realloc2-bal.rep"
-
 /*
  * This constant gives the estimated performance of the libc malloc
  * package using our traces on some reference system, typically the
