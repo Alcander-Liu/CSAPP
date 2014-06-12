@@ -18,35 +18,32 @@
 #include <stdarg.h>
 #include <assert.h>
 #define MAXLINE 8192
-int parse_uri(char *uri, char *target_addr, char *path, int  *port);
 void format_log_entry(char *logstring, struct sockaddr_in *sockaddr, char *uri, int size);
-
 typedef struct {
-  char *uri;
+  char *path;
   char *host;
   char *port;
 }HTTPRequest;
 
 typedef struct {
   char *status;
-  size_t size;
+  char *date;
+  char *size;
 }HTTPResponse;
 
 int HTTPRequestParser(const char *buffer, size_t size, HTTPRequest *request);
-int HTTPResponseParser(const char *buffer, size_t size, HTTPResponse *response);
 void FreeHTTPRequest(HTTPRequest *ptr);
 void FreeHTTPREsponse(HTTPResponse *ptr);
 void DispHTTPRequestStruct(const HTTPRequest *request);
-
 char *GetBroswerRequest(int sock_fd, size_t *rec_size);
-
+int ForwardBroswerRequest(int sock_fd, const char *request, size_t size);
+char *GetHostResponse(int sock_fd, size_t *rec_size, HTTPResponse *response);
 int main(int argc, char **argv) {
   /* Check arguments */
   if (argc != 2) {
     fprintf(stderr, "Usage: %s <port number>\n", argv[0]);
 	exit(0);
   }
-
   int server_fd = CreateServerSocket(argv[1], AF_INET, 10);
   if (server_fd == -1) {
     exit(0);
@@ -55,18 +52,31 @@ int main(int argc, char **argv) {
   int broswer_fd = Accept(server_fd, -1, 0, client_addr);
   if (broswer_fd > 0) {
     size_t size = 0;
+    DebugStr("GetBroswerRequest\n");
     char *request_buf = GetBroswerRequest(broswer_fd, &size);
     assert(request_buf);
+    DebugStr("Receive Request:\n");
+    DebugStr("%s\n", request_buf);
+
     HTTPRequest request;
-    HTTPRequestParser(request_buf, size, &request);
-    DispHTTPRequestStruct(&request);
-    Free(request_buf);
+    DebugStr("Parse HTTP\n");
+    if (HTTPRequestParser(request_buf, size, &request)) {
+      DebugStr("\nResult of HTTPRequestParser:\n");
+      DispHTTPRequestStruct(&request);
+      int fd = ConnectTo(request.host, request.port, -1, 0);
+      assert(ForwardBroswerRequest(fd, request_buf, size) == 1);
+
+      HTTPResponse response;
+      size = 0;
+      char *response_buf = GetHostResponse(fd, &size, &response);
+      assert(response_buf);
+      DebugStr("%s\n", response_buf);
+    }
   }
   Close(broswer_fd);
   Close(server_fd);
   exit(0);
 }
-
 
 /*
  * parse_uri - URI parser
@@ -145,21 +155,26 @@ void format_log_entry(char *logstring, struct sockaddr_in *sockaddr,
 }
 
 int HTTPRequestParser(const char *buffer, size_t size, HTTPRequest *request) {
+
+  request->path = NULL;
+  request->host = NULL;
+  request->port = NULL;
+
   if (!strstr(buffer, "GET")) {
     app_error("Currently only support GET Method\n");
     return 0;
   }
 
-  const char *uri_start = buffer + 4;
-  const char *uri_end = strchr(uri_start, ' ');
-  if (!uri_end) {
-    app_error("Parse uri error\n");
+  const char *path_start = buffer + 4;
+  const char *path_end = strchr(path_start, ' ');
+  if (!path_end) {
+    app_error("Parse path error\n");
     return 0;
   }
 
-  size_t uri_size= uri_end - uri_start;
-  strncpy(request->uri = Malloc(uri_size), uri_start, uri_size);
-
+  size_t path_size= path_end - path_start;
+  strncpy(request->path = Malloc(path_size+1), path_start, path_size);
+  request->path[path_size] = '\0';
   const char *host_start = strstr(buffer, "Host: ");
   if (!host_start) {
     app_error("Parse host error\n");
@@ -167,13 +182,20 @@ int HTTPRequestParser(const char *buffer, size_t size, HTTPRequest *request) {
   }
 
   host_start += 6;
-  const char *host_end = strchr(host_start, ':');
+  const char *host_end = strpbrk(host_start, ":\r\n");
   if (!host_end) {
     app_error("Parse host error\n");
     return 0;
   }
+
   size_t host_size = host_end - host_start;
-  strncpy(request->host = Malloc(host_size), host_start, host_size);
+  strncpy(request->host = Malloc(host_size+1), host_start, host_size);
+  request->host[host_size] = '\0';
+
+  if (*host_end != ':') {
+    strncpy(request->port = Malloc(3), "80", 3);
+    return 1;
+  }
 
   const char *port_start = host_end + 1;
   const char *port_end = strchr(port_start, '\n');
@@ -181,19 +203,21 @@ int HTTPRequestParser(const char *buffer, size_t size, HTTPRequest *request) {
     app_error("Parse port error\n");
     return 0;
   }
+
   size_t port_size = port_end - port_start;
-  strncpy(request->port = Malloc(port_size), port_start, port_size);
+  strncpy(request->port = Malloc(port_size+1), port_start, port_size);
+  request->port[port_size] = '\0';
   return 1;
 }
 
 void FreeHTTPRequest(HTTPRequest *ptr) {
-  free(ptr->uri);
-  free(ptr->host);
-  free(ptr->port);
+  if (ptr->path) free(ptr->path);
+  if (ptr->host) free(ptr->host);
+  if (ptr->port) free(ptr->port);
 }
 
 void DispHTTPRequestStruct(const HTTPRequest *request) {
-  fprintf(stdout, "uri=%s\n", request->uri);
+  fprintf(stdout, "path=%s\n", request->path);
   fprintf(stdout, "host=%s\n", request->host);
   fprintf(stdout, "port=%s\n", request->port);
 }
@@ -212,9 +236,9 @@ char *GetBroswerRequest(int sock_fd, size_t *rec_size) {
       return NULL;
     }
     DebugStr("Recv %zu\n", size);
-    if (*rec_size + size > req_buf_size) {
+    if (*rec_size + size >= req_buf_size) {
       req_buf_size = *rec_size + size + 1000;
-      Realloc(request_buf, req_buf_size);
+      request_buf = Realloc(request_buf, req_buf_size);
     }
     strncpy(request_buf + *rec_size, read_buf, size);
     *rec_size += size;
@@ -222,7 +246,133 @@ char *GetBroswerRequest(int sock_fd, size_t *rec_size) {
       Free(read_buf);
       return request_buf;
     }
-    DebugStr("Current Receive:%s", request_buf);
-    DebugStr("Cannot find end\n");
+    request_buf[*rec_size] = '\0';
   }
+}
+
+int ForwardBroswerRequest(int sock_fd, const char *request, size_t size) {
+  return SocketSend(sock_fd, request, &size, -1, 0);
+}
+
+char *GetHostResponse(int sock_fd, size_t *rec_size, HTTPResponse *response) {
+  response->status = NULL;
+  response->date = NULL;
+  response->size = NULL;
+
+  size_t response_buf_size = 5000;
+  char *response_buf = Malloc(response_buf_size);
+  char *read_buf = Malloc(1000);
+  *rec_size = 0;
+  typedef enum {
+    WAIT_FOR_HEADER = 0,
+    PROCESS_HEADER = 1,
+    WAIT_FOR_CONTENT = 2
+  }State;
+
+  State state = WAIT_FOR_HEADER;
+  const char *pContent = NULL;
+  const char *p = NULL;
+  const char *size_start = NULL;
+  const char *size_end = NULL;
+  size_t header_size = 0;
+  size_t content_size = 0;
+  size_t size_len = 0;
+  int finish = 0;
+  while (!finish) {
+    size_t size = 1000;
+    switch(state) {
+      case WAIT_FOR_HEADER:
+        switch (SocketRecv(sock_fd, read_buf, &size, DONT_WAIT_ALL_DATA, 30000, 0)) {
+          case 1: break;
+          case 0:
+            DebugStr("Timeout\n");
+            Free(read_buf);
+            Free(response_buf);
+            return NULL;
+          case -1:
+            DebugStr("Host closed socket\n");
+            Free(read_buf);
+            Free(response_buf);
+            return NULL;
+        }
+
+        if (*rec_size + size >= response_buf_size) {
+          response_buf_size = *rec_size + size + 5000;
+          response_buf = Realloc(response_buf, response_buf_size);
+        }
+
+        strncpy(response_buf_size + *rec_size, read_buf, size);
+        *rec_size += size;
+        if ((p = strstr(response_buf, "\r\n\r\n"))) {
+          header_size = p - response_buf + 2;
+          state = PROCESS_HEADER;
+        }
+        break;
+
+      case PROCESS_HEADER:
+        pContent = p + 4;
+        size_start = strstr(response_buf, "Content-Length: ");
+        if (size_start) {
+          size_start += 16;
+          size_end = strpbrk(size_start, "\r\n\0");
+          size_len = size_end - size_start;
+          strncpy(response->size = Malloc(size_len + 1),
+                  size_start, size_len);
+          response->size[size_len] = '\0';
+          content_size = strtoul(response->size, NULL, 10);
+        }
+
+        if (header_size + 2 + content_size > *rec_size) {
+          state = WAIT_FOR_HEADER;
+        } else {
+          finish = 1;
+        }
+        break;
+
+      case WAIT_FOR_CONTENT:
+        switch (SocketRecv(sock_fd, read_buf, &size, DONT_WAIT_ALL_DATA, 30000, 0)) {
+          case 1: break;
+          case 0:
+            DebugStr("Timeout\n");
+            Free(read_buf);
+            Free(response_buf);
+            return NULL;
+          case -1:
+            DebugStr("Host closed socket\n");
+            Free(read_buf);
+            Free(response_buf);
+            return NULL;
+        }
+        if (*rec_size + size >= response_buf_size) {
+          response_buf_size = *rec_size + size + 5000;
+          response_buf = Realloc(response_buf, response_buf_size);
+        }
+        strncpy(response_buf_size + *rec_size, read_buf, size);
+        *rec_size += size;
+        if (header_size + 2 + content_size == *rec_size) {
+          finish = 1;
+        }
+        break;
+    }
+  }
+
+  // Get status
+  const char *status_end = strpbrk(response_buf, "\r\n\0");
+  size_t status_line_len = status_end - (const char*)response_buf;
+  strncpy(response->status = Malloc(status_line_len + 1),
+          response_buf, status_line_len);
+  response->status[status_line_len] = '\0';
+
+  // Get Date
+  const char *date_start = strstr(response_buf, "Date: ");
+  if (date_start) {
+    date_start += 6;
+    const char *date_end = strpbrk(date_start, "\r\n\0");
+    size_t date_size = date_end - date_start;
+    strncpy(response->date = Malloc(date_size + 1), date_start, date_size);
+    response->date[date_size] = '\0';
+  }
+
+  Free(read_buf);
+  return response_buf;
 }

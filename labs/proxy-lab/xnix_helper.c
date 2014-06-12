@@ -278,7 +278,7 @@ int Accept(int sock_fd, int timeout, int retry, char *client_addr) {
 }
 // Try to connect to a remote sever using SOCK_STREAM
 // 1. Input:
-//  <1> addr : server ip address
+//  <1> host : server host name or ip address
 //  <2> port : server port
 //  <3> timeout : in ms
 //    - if < 0 block forever
@@ -287,8 +287,8 @@ int Accept(int sock_fd, int timeout, int retry, char *client_addr) {
 //  <4> retry : currently doesn't support
 // 2. Output
 //  <2> if success return sock_fd, else return -1
-int ConnectTo(const char* addr, const char* port, int timeout, int retry) {
-  if (!addr || !port) {
+int ConnectTo(const char* host, const char* port, int timeout, int retry) {
+  if (!host || !port) {
     app_error("server address or port cannot be empty!.\n");
     return -1;
   }
@@ -301,7 +301,7 @@ int ConnectTo(const char* addr, const char* port, int timeout, int retry) {
   hints.ai_socktype = SOCK_STREAM;
 
   int ret;
-  if ((ret = getaddrinfo(addr, port, &hints, &server_info)) != 0) {
+  if ((ret = getaddrinfo(host, port, &hints, &server_info)) != 0) {
     ai_error(ret);
     return -1;
   }
@@ -372,7 +372,7 @@ int ConnectTo(const char* addr, const char* port, int timeout, int retry) {
   }
 
   if (!p) {
-    DebugStr("failed to connect to (%s, %s)\n", addr, port);
+    DebugStr("failed to connect to (%s, %s)\n", host, port);
     if (server_info) {
       freeaddrinfo(server_info);
     }
