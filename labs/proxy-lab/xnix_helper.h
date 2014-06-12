@@ -1,7 +1,8 @@
-#ifndef __UNIX_WRAPPER_H__
-#define __UNIX_WRAPPER_H__
+#ifndef __XNIX_HELPER_H__
+#define __XNIX_HELPER_H__
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <unistd.h>
 #include <string.h>
 #include <ctype.h>
@@ -24,18 +25,20 @@
 
 #define LOG_DEBUG_STR 1
 #if LOG_DEBUG_STR
-  #define DebugStr(args...) fprintf(stderr, args);
+  #define DebugStr(args...) fprintf(stderr, args)
 #else
   #define DebugStr(args...)
 #endif
 
-// Error Handling
+
 extern int h_errno;     // defined by BIND for DNS erros
 // these functions will terminate the current process by calling exit(0)
 void unix_error(char *msg);
 void posix_error(int code, char *msg);
 void dns_error(char *msg);
+void ai_error(int code);
 void app_error(char *msg);
+#define app_error(args...) fprintf(stderr, args)
 
 // Process control wrappers
 extern char **environ;  // defined by libc
@@ -77,6 +80,11 @@ void Fstat(int fd, struct stat *buf);
 void *Mmap(void *addr, size_t len, int prot, int flags, int fd, off_t offset);
 void Munmap(void *start, size_t length);
 
+// Dynamic storage allocation wrappers
+void *Malloc(size_t size);
+void *Realloc(void *ptr, size_t size);
+void *Calloc(size_t nmemb, size_t size);
+void Free(void *ptr);
 
 
 // RIO (Robust I/O)
@@ -103,4 +111,100 @@ ssize_t rio_readlineb(rio_t *rp, void *usrbuf, size_t maxlen);
 // read n bytes per call
 ssize_t rio_readnb(rio_t *rp, void *usrbuf, size_t n);
 
+// Network Wrapper
+// Create a server socket and bind it to a specific port
+// 1. Input:
+//  <0> port
+//  <1> type
+//    - AF_INET  : IPv4
+//    - AF_INET6 : IPv6
+//  <2> backlog : specify the max length of connection pending queue. 10 is recommened by default.
+// 2. Output:
+//  <1> ret : Server Socket FD if success else -1
+int CreateServerSocket(const char *port, int type, int backlog);
+
+// Try to accept a remote connection from client.
+// Implement based on accept() and select()
+// 1. Input:
+//  <1> socket
+//  <2> timeout : in ms
+//    - if > 0 block for timeout us
+//    - if = 0 non-blocking
+//    - if < 0 block forever if no remote connection
+//  <3> retry : currently does not support
+//  <4> client_addr: a pointer to a str buffer, length at least 100
+// 2. Output:
+//  <1> client_addr : client ip address string
+//  <2> ret : client socket if success else -1
+int Accept(int sock_fd, int timeout, int retry, char *client_addr);
+
+// Try to connect to a remote sever using SOCK_STREAM
+// 1. Input:
+//  <1> addr : server ip address
+//  <2> port : server port
+//  <3> timeout : in ms
+//    - if < 0 block forever
+//    - if = 0 non-block
+//    - if > 0 timeout
+//  <4> retry : currently doesn't support
+// 2. Output
+//  <2> if success return sock_fd, else return -1
+int ConnectTo(const char* addr, const char* port, int timeout, int retry);
+
+// Implement based on write() and select(). It supports block and non-block
+// 1. Input:
+//  <1> sock_fd
+//  <2> buffer
+//  <3> size : point to size, specify the number of bytest want to send
+//  <4> timeout : in ms
+//    - if < 0, block forever if socket buffer is not enough to hold the user's buffer data
+//    - if = 0, will not block and will return immediately
+//    - if > 0, will block for a timeout ms if the socket buffer is not enough to hold user's buffer data
+// timeout > 0, Send will block for a timeout us if the socket buffer is not
+// enough to hold user's buffer data
+//  <5> retry : currently doesn't support
+// 2. Output:
+//  <1> size : return the actual bytes copy into the socket buffer
+//  <2> ret
+//    - 0 timeout
+//    - -1 peer close the socket
+//    - 1 all data are copied into socket buffer
+// 3. Note
+//  <1> Writting to connection that has benn closed by the peer FIRST TIME elicits
+//  an error with errno set to EPIPE. Writting to such a connection a second time
+//  elicits a SIGPIPE signal whose default action is to terminate the process.
+//  <2> When some unix internal errors occur, SocketSend will terminate the program
+int SocketSend(int sock_fd, const char *buffer, size_t *size, int timeout, int retry);
+
+// Read data from socket stream.
+// Implement based on read() and select(). It supports block and non-block
+// 1. Input:
+//  <1> sock_fd
+//  <2> buffer
+//  <3> size : a pointer to size_t, specify the number of bytes want to receive
+//  <4> flag
+//    - WAIT_ALL_OR_TIMEOUT : Wait all the data arrive or timeout
+//    - DONT_WAIT_ALL_DATA  : Return immediately first time get the data
+//  <5> timeout : timeout in ms
+//    - if timeout < 0, Recv will block forever if socket buffer does not contain any data.
+//    - if timeout = 0, Recv will not block and will return immediately.
+//    - if timeout > 0, Recv will block for a timeout ms if the socket buffer does not contain any data.
+//  <6> retry : currently doesn't support
+// 2. Output
+//  <1> size : *size the actual bytes copy from socket buffer
+//  <2> ret
+//    - -1 sender close the socket
+//    - 0 timeout
+//    - 1 all data are copied into socket buffer if flag = WAIT_ALL_OR_TIMEOUT
+//      or some data are copied into socket buffer if flag = DONT_WAIT_ALL_DATA
+// 3. Note
+//  <1> When some unix internal errors occur, SocketRecv will terminate the program
+typedef enum {
+  WAIT_ALL_OR_TIMEOUT = 0,  // Wait all the data arrive or timeout
+  DONT_WAIT_ALL_DATA = 1,   // Return immediately first time get the data
+}RecvFlag;
+int SocketRecv(int sock_fd, char *buffer, size_t *size, RecvFlag flag,
+               int timeout, int retry);
+int SetSockBlocking(int sock_fd);
+int SetSockNonBlocking(int sock_fd);
 #endif

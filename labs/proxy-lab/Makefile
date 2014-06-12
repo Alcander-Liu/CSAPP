@@ -6,7 +6,7 @@ CC = clang
 CFLAGS = -Wall -g -std=c99
 LDFLAGS = -lpthread
 
-OBJS = proxy.o csapp.o
+OBJS = proxy.o xnix_helper.o
 
 all: proxy
 
