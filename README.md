@@ -27,3 +27,5 @@ Computer Systems A Programmer's Perspective (深入理解计算机系统)
     6. malloc-lab (version: Nov 30, 2010)
       * Performance: 96/100
     7. proxy-lab (version: Mar 26, 2003)
+      * Not finish yet
+        * need to understand details of HTTP

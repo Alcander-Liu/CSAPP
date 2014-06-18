@@ -3,7 +3,7 @@ VERSION = 1
 HANDINDIR = /afs/cs/academic/class/15213-f02/L7/handin
 
 CC = clang
-CFLAGS = -Wall -g -std=c99
+CFLAGS = -Wall -g -std=c99 -L/usr/local/lib -I/usr/local/include
 LDFLAGS = -lpthread
 
 OBJS = proxy.o xnix_helper.o
